@@ -323,8 +323,8 @@ if args['disable_depth']:
 decode_nn=decode_mobilenet_ssd
 show_nn=show_mobilenet_ssd
 
-
-if args['cnn_model'] == 'squeezenet1.0':
+# todo load labels from json
+if args['cnn_model'] in ['squeezenet1.0', 'my_model']:
     global label_list
     decode_nn=decode_squeezenet_recognition
     show_nn=show_squeezenet_recognition
@@ -502,7 +502,6 @@ while True:
     # retreive data from the device
     # data is stored in packets, there are nnet (Neural NETwork) packets which have additional functions for NNet result interpretation
     nnet_packets, data_packets = p.get_available_nnet_and_data_packets()
-    
     packets_len = len(nnet_packets) + len(data_packets)
     if packets_len != 0:
         reset_process_wd()
