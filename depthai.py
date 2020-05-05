@@ -270,6 +270,28 @@ def show_landmarks_recognition(entries_prev, frame):
 
     return frame
 
+def decode_squeezenet_recognition(nnet_packet):
+    detections = []
+    for i in range(len(nnet_packet.entries()[0][0])):
+        detections.append(nnet_packet.entries()[0][0][i])
+    return detections
+
+def show_squeezenet_recognition(entries_prev, frame):
+    # img_h = frame.shape[0]
+    # img_w = frame.shape[1]
+    global label_list
+    if len(entries_prev) != 0:
+        max_confidence = max(entries_prev)
+        if(max_confidence > 0.3):
+            idx = np.argmax(entries_prev)
+            if(idx < len(label_list)):
+                cv2.putText(frame, str(label_list[idx]), (10, 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                cv2.putText(frame, '{:.2f}'.format(100*max_confidence) + ' %', (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+
+    frame = cv2.resize(frame, (300, 300))
+
+    return frame
+
 global args
 try:
     args = vars(parse_args())
@@ -300,6 +322,20 @@ if args['disable_depth']:
 
 decode_nn=decode_mobilenet_ssd
 show_nn=show_mobilenet_ssd
+
+
+if args['cnn_model'] == 'squeezenet1.0':
+    global label_list
+    decode_nn=decode_squeezenet_recognition
+    show_nn=show_squeezenet_recognition
+    calc_dist_to_bb=False
+    labels_path = consts.resource_paths.nn_resource_path + args['cnn_model']+ "/" + args['cnn_model'] + ".txt"
+    labels_path_path = Path(labels_path)
+    if not labels_path_path.exists():
+        print(bcolors.WARNING + "\nWARNING: NN labels not found in: " + labels_path + bcolors.ENDC)
+        os._exit(1)
+    with open(labels_path_path) as labels_file:
+        label_list = labels_file.read().splitlines()
 
 if args['cnn_model'] == 'age-gender-recognition-retail-0013':
     decode_nn=decode_age_gender_recognition
