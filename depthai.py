@@ -377,7 +377,7 @@ def decode_tiny_yolo(nnet_packet):
 
     # print("number of outputs: " + str(len(nnet_packet.entries()[0])))
     NN_outputs = nnet_packet.entries()[0]
-    output_shapes = [(1, 24, 26, 26), (1, 24, 13, 13)]
+    output_shapes = [(1, 255, 26, 26), (1, 255, 13, 13)]
     NN_output_list = []
 
     prev_offset = 0
@@ -387,7 +387,7 @@ def decode_tiny_yolo(nnet_packet):
         output = np.reshape(output, output_shapes[i])
         NN_output_list.append(output)
         prev_offset += n_size
-        print("nnet_packet length : {0} {1}".format(str(n_size), str(output.shape)))
+        # print("nnet_packet length : {0} {1}".format(str(n_size), str(output.shape)))
 
     filtered_objects = []
     for output_node_results in NN_output_list:
