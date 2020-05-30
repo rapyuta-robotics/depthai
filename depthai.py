@@ -200,71 +200,63 @@ def show_mobilenet_ssd(entries_prev, frame, is_depth=0):
     return frame
 
 # Adjust these thresholds
-detection_threshold = 0.60
-IOU_THRESHOLD = 0.25
+DETECTION_THRESHOLD = 0.50
+IOU_THRESHOLD = 0.1
 
 # Tiny yolo anchor box values
 anchors = [10,14, 23,27, 37,58, 81,82, 135,169, 344,319]
 
-# creates a mask to remove duplicate objects (boxes) and their related probabilities and classifications
-# that should be considered the same object.  This is determined by how similar the boxes are
-# based on the intersection-over-union metric.
-# box_list is as list of boxes (4 floats for centerX, centerY and Length and Width)
-def get_duplicate_box_mask(box_list):
-    # The intersection-over-union threshold to use when determining duplicates.
-    # objects/boxes found that are over this threshold will be
-    # considered the same object
-    max_iou = IOU_THRESHOLD
 
-    box_mask = np.ones(len(box_list))
-
-    for i in range(len(box_list)):
-        if box_mask[i] == 0: continue
-        for j in range(i + 1, len(box_list)):
-            if get_intersection_over_union(box_list[i], box_list[j]) >= max_iou:
-                if box_list[i][4] < box_list[j][4]:
-                    box_list[i], box_list[j] = box_list[j], box_list[i]
-                box_mask[j] = 0.0
-
-    filter_iou_mask = np.array(box_mask > 0.0, dtype='bool')
-    return filter_iou_mask
     
+def sigmoid(x):
+    return 1.0 / (1 + np.exp(x * -1.0))
 
-# Evaluate the intersection-over-union for two boxes
-# The intersection-over-union metric determines how close
-# two boxes are to being the same box.  The closer the boxes
-# are to being the same, the closer the metric will be to 1.0
-# box_1 and box_2 are arrays of 4 numbers which are the (x, y)
-# points that define the center of the box and the length and width of
-# the box.
-# Returns the intersection-over-union (between 0.0 and 1.0)
-# for the two boxes specified.
-def get_intersection_over_union(box_1, box_2):
 
-    # one diminsion of the intersecting box
-    intersection_dim_1 = min(box_1[0]+0.5*box_1[2],box_2[0]+0.5*box_2[2])-\
-                         max(box_1[0]-0.5*box_1[2],box_2[0]-0.5*box_2[2])
+def calculate_overlap(x1, w1, x2, w2):
+    box1_coordinate = max(x1 - w1 / 2.0, x2 - w2 / 2.0)
+    box2_coordinate = min(x1 + w1 / 2.0, x2 + w2 / 2.0)
+    overlap = box2_coordinate - box1_coordinate
+    return overlap
 
-    # the other dimension of the intersecting box
-    intersection_dim_2 = min(box_1[1]+0.5*box_1[3],box_2[1]+0.5*box_2[3])-\
-                         max(box_1[1]-0.5*box_1[3],box_2[1]-0.5*box_2[3])
 
-    if intersection_dim_1 < 0 or intersection_dim_2 < 0 :
-        # no intersection area
-        intersection_area = 0
-    else :
-        # intersection area is product of intersection dimensions
-        intersection_area =  intersection_dim_1*intersection_dim_2
+def calculate_iou(box, truth):
+    # calculate the iou intersection over union by first calculating the overlapping height and width
+    width_overlap = calculate_overlap(box[0], box[2], truth[0], truth[2])
+    height_overlap = calculate_overlap(box[1], box[3], truth[1], truth[3])
+    # no overlap
+    if width_overlap < 0 or height_overlap < 0:
+        return 0
 
-    # calculate the union area which is the area of each box added
-    # and then we need to subtract out the intersection area since
-    # it is counted twice (by definition it is in each box)
-    union_area = box_1[2]*box_1[3] + box_2[2]*box_2[3] - intersection_area
-
-    # now we can return the intersection over union
+    intersection_area = width_overlap * height_overlap
+    union_area = box[2] * box[3] + truth[2] * truth[3] - intersection_area
     iou = intersection_area / union_area
-    #print("iou: ", iou)
     return iou
+
+
+def apply_nms(boxes):
+    # sort the boxes by score in descending order
+    sorted_boxes = sorted(boxes, key=lambda d: d[7])[::-1]
+    high_iou_objs = dict()
+    # compare the iou for each of the detected objects
+    for current_object in range(len(sorted_boxes)):
+        if current_object in high_iou_objs:
+            continue
+
+        truth = sorted_boxes[current_object]
+        for next_object in range(current_object + 1, len(sorted_boxes)):
+            if next_object in high_iou_objs:
+                continue
+            box = sorted_boxes[next_object]
+            iou = calculate_iou(box, truth)
+            if iou >= IOU_THRESHOLD:
+                high_iou_objs[next_object] = 1
+
+    # filter and sort detected items
+    filtered_result = list()
+    for current_object in range(len(sorted_boxes)):
+        if current_object not in high_iou_objs:
+            filtered_result.append(sorted_boxes[current_object])
+    return filtered_result
 
 GREEN = '\033[1;32m'
 RED = '\033[1;31m'
@@ -272,93 +264,90 @@ NOCOLOR = '\033[0m'
 YELLOW = '\033[1;33m'
 DEVICE = "MYRIAD"
 
-# displays basic information regarding the model
-def display_info(input_shape, net_outputs, image, ir, labels):
-    
-    output_nodes = []
-    output_iter = iter(net_outputs)
-    for i in range(len(net_outputs)):
-        output_nodes.append(next(output_iter))
 
-    print()
-    print(YELLOW + 'Tiny Yolo v3: Starting application...' + NOCOLOR)
-    print('   - ' + YELLOW + 'Plugin:       ' + NOCOLOR + 'Myriad')
-    print('   - ' + YELLOW + 'IR File:     ' + NOCOLOR, ir)
-    print('   - ' + YELLOW + 'Input Shape: ' + NOCOLOR, input_shape)
-    print('   - ' + YELLOW + 'Output Shapes:' + NOCOLOR)
-    for j in range(len(output_nodes)):
-        print('      - '+YELLOW+'output #' + str(j) + ' name: ' + NOCOLOR + output_nodes[j])
-        print('         - output shape: ' + NOCOLOR + str(net_outputs[output_nodes[j]].shape))
-    print('   - ' + YELLOW + 'Labels File: ' + NOCOLOR, labels)
-    print('   - ' + YELLOW + 'Image File:   ' + NOCOLOR, image)
-    
+def post_processing(output, label_list, threshold):
 
-# This function parses the output results from tiny yolo v3.
-# The results are transposed so the output shape is (1, 13, 13, 255) or (1, 26, 26, 255). Original will be (1, 255, w, h).
-# Tiny yolo does detection on two different scales using 13x13 grid and 26x26 grid.
-# This is how the output is parsed:
-# Imagine the image being split up into 13x13 or 26x26 grid. Each grid cell contains 3 anchor boxes. 
-# For each of those 3 anchor boxes, there are 85 values. 
-# 80 class probabilities + 4 coordinate values + 1 box confidence score = 85 values 
-# So that results in each grid cell having 255 values (85 values x 3 anchor boxes = 255 values)
-def parseTinyYoloV3Output(output_node_results, filtered_objects, source_image_width, source_image_height, scaled_w, scaled_h, detection_threshold, num_labels):
-    # transpose the output node results
-    output_node_results = output_node_results.transpose(0,2,3,1)
-    output_h = output_node_results.shape[1]
-    output_w = output_node_results.shape[2]
-    # for i in range(4):
-    #     print("shape " + str(i) + " " +  str(output_node_results.shape[i]))
-    # print("output_node_results " +str(len(output_node_results)))
+    num_classes = 20
+    num_grids = 13
+    num_anchor_boxes = 5
+    original_results = output.astype(np.float32)   
 
-    # 80 class scores + 4 coordinate values + 1 objectness score = 85 values
-    # 85 values * 3 prior box scores per grid cell= 255 values 
-    # 255 values * either 26 or 13 grid cells
-    num_of_classes = num_labels
-    num_anchor_boxes_per_cell = 3
-    
-    # Set the anchor offset depending on the output result shape
-    anchor_offset = 0
-    if output_w == 13:
-        anchor_offset = 2 * 3
-    elif output_w == 26:
-        anchor_offset = 2 * 0
-    else:
-        raise ValueError
+    # Tiny Yolo V2 uses a 13 x 13 grid with 5 anchor boxes for each grid cell.
+    # This specific model was trained with the VOC Pascal data set and is comprised of 20 classes
 
-	# used to calculate approximate coordinates of bounding box
-    x_ratio = float(source_image_width) / scaled_w
-    y_ratio = float(source_image_height) / scaled_h
+    original_results = np.reshape(original_results, (5, 25, 13, 13))
+    reordered_results = np.transpose(original_results, (2, 3, 0, 1))
+    reordered_results = np.reshape(reordered_results, (169, 5, 25))
 
-	# Filter out low scoring results
-    output_size = output_w * output_h
-    for result_counter in range(output_size): 
-        row = int(result_counter / output_w)
-        col = int(result_counter % output_h)
-        for anchor_boxes in range(num_anchor_boxes_per_cell): 
-        	# check the box confidence score of the anchor box. This is how likely the box contains an object
-            box_confidence_score = output_node_results[0][row][col][anchor_boxes * num_of_classes + 5 + 4]
-            if box_confidence_score < detection_threshold:
-                continue
-            # Calculate the x, y, width, and height of the box
-            x_center = (col + output_node_results[0][row][col][anchor_boxes * num_of_classes + 5 + 0]) / output_w * scaled_w
-            y_center = (row + output_node_results[0][row][col][anchor_boxes * num_of_classes + 5 + 1]) / output_h * scaled_h
-            width = np.exp(output_node_results[0][row][col][anchor_boxes * num_of_classes + 5 + 2]) * anchors[anchor_offset + 2 * anchor_boxes]
-            height = np.exp(output_node_results[0][row][col][anchor_boxes * num_of_classes + 5 + 3]) * anchors[anchor_offset + 2 * anchor_boxes + 1]
-            # Now we check for anchor box for the highest class probabilities.
-            # If the probability exceeds the threshold, we save the box coordinates, class score and class id
-            for class_id in range(num_of_classes): 
-                class_probability = output_node_results[0][row][col][anchor_boxes * num_of_classes + 5 + 5 + class_id]
-                # Calculate the class's confidence score by multiplying the box_confidence score by the class probabiity
-                class_confidence_score = class_probability * box_confidence_score
-                if (class_confidence_score) < detection_threshold:
-                    continue
-                # Calculate the bounding box top left and bottom right vertexes
-                xmin = max(int((x_center - width / 2) * x_ratio), 0)
-                ymin = max(int((y_center - height / 2) * y_ratio), 0)
-                xmax = min(int(xmin + width * x_ratio), source_image_width-1)
-                ymax = min(int(ymin + height * y_ratio), source_image_height-1)
-                filtered_objects.append((xmin, ymin, xmax, ymax, class_confidence_score, class_id))
-    
+    # The 125 results need to be re-organized into 5 chunks of 25 values
+    # 20 classes + 1 score + 4 coordinates = 25 values
+    # 25 values for each of the 5 anchor bounding boxes = 125 values
+    #reordered_results = np.zeros((13 * 13, 5, 25))
+
+    index = 0
+    #for row in range( num_grids ):
+    #    for col in range( num_grids ):
+    #        for b_box_voltron in range(125):
+    #            b_box = row * num_grids + col
+    #            b_box_num = int(b_box_voltron / 25)
+    #            b_box_info = b_box_voltron % 25
+    #            reordered_results[b_box][b_box_num][b_box_info] = original_results[row][col][b_box_voltron]
+
+    # shapes for the 5 Tiny Yolo v2 bounding boxes
+    anchor_boxes = [1.08,1.19, 3.42,4.41, 6.63,11.38, 9.42,5.11, 16.62,10.52]
+
+    boxes = list()
+    # iterate through the grids and anchor boxes and filter out all scores which do not exceed the DETECTION_THRESHOLD
+    for row in range(num_grids):
+        for col in range(num_grids):
+            for anchor_box_num in range(num_anchor_boxes):
+                box = list()
+                class_list = list()
+                current_score_total = 0
+                # calculate the coordinates for the current anchor box
+                box_x = (col + sigmoid(reordered_results[row * 13 + col][anchor_box_num][0])) / 13.0
+                box_y = (row + sigmoid(reordered_results[row * 13 + col][anchor_box_num][1])) / 13.0
+                box_w = (np.exp(reordered_results[row * 13 + col][anchor_box_num][2]) *
+                         anchor_boxes[2 * anchor_box_num]) / 13.0
+                box_h = (np.exp(reordered_results[row * 13 + col][anchor_box_num][3]) *
+                         anchor_boxes[2 * anchor_box_num + 1]) / 13.0
+                
+                # find the class with the highest score
+                for class_enum in range(num_classes):
+                    class_list.append(reordered_results[row * 13 + col][anchor_box_num][5 + class_enum])
+
+
+
+                current_score_total = sum(class_list)
+                for current_class in range(len(class_list)):
+                    class_list[current_class] = class_list[current_class] * 1.0 / current_score_total
+
+                # probability that the current anchor box contains an item
+                object_confidence = sigmoid(reordered_results[row * 13 + col][anchor_box_num][4])
+                # highest class score detected for the object in the current anchor box
+                highest_class_score = max(class_list)
+                # index of the class with the highest score
+                class_w_highest_score = class_list.index(max(class_list)) + 1
+                # the final score for the detected object
+                final_object_score = object_confidence * highest_class_score
+
+                box.append(box_x)
+                box.append(box_y)
+                box.append(box_w)
+                box.append(box_h)
+                box.append(class_w_highest_score)
+                box.append(object_confidence)
+                box.append(highest_class_score)
+                box.append(final_object_score)
+
+                # filter out all detected objects with a score less than the threshold
+                if final_object_score > threshold:
+                    boxes.append(box)
+
+    # gets rid of all duplicate boxes using non-maximal suppression
+    results = apply_nms(boxes)
+
+    return results
 
 
 def decode_tiny_yolo(nnet_packet):
@@ -371,58 +360,61 @@ def decode_tiny_yolo(nnet_packet):
     # print("nnet_packet.entries()" + str(len(nnet_packet.entries())))
     raw_detections = nnet_packet.get_tensor("out")
     raw_detections.dtype = np.float16  # reinterpret cast
-
-    # print("nnet_packet.get_tensor()" + str(len(raw_detections)))
-    # print("nnet_packet.get_tensor()" + str(raw_detections.dtype))
-
-    # print("number of outputs: " + str(len(nnet_packet.entries()[0])))
-    NN_outputs = nnet_packet.entries()[0]
-    output_shapes = [(1, 255, 26, 26), (1, 255, 13, 13)]
-    NN_output_list = []
-
-    prev_offset = 0
-    for i in range(len(nnet_packet.entries()[0])):
-        n_size = len(NN_outputs[i])
-        output = raw_detections[prev_offset:prev_offset+n_size]
-        output = np.reshape(output, output_shapes[i])
-        NN_output_list.append(output)
-        prev_offset += n_size
-        # print("nnet_packet length : {0} {1}".format(str(n_size), str(output.shape)))
-
+    
     filtered_objects = []
-    for output_node_results in NN_output_list:
-        parseTinyYoloV3Output(output_node_results, filtered_objects, source_image_width, source_image_height, scaled_w, scaled_h, detection_threshold, len(labels))
+    filtered_objects = post_processing(raw_detections, labels, DETECTION_THRESHOLD)
+
 
     return filtered_objects
 
-BOX_COLOR = (0,255,0)
-LABEL_BG_COLOR = (70, 120, 70) # greyish green background for text
-TEXT_COLOR = (255, 255, 255)   # white text
-TEXT_FONT = cv2.FONT_HERSHEY_SIMPLEX
 
-def show_tiny_yolo(filtered_objects, frame, is_depth=0):
+def show_tiny_yolo(results, original_img, is_depth=0):
 
-    img_h = frame.shape[0]
-    img_w = frame.shape[1]
+    image_width = original_img.shape[1]
+    image_height = original_img.shape[0]
 
-    # 2. Filter out duplicate objects from all detected objects
-    filtered_mask = get_duplicate_box_mask(filtered_objects)
-    # 3. Draw rectangles and set up display texts
-    for object_index in range(len(filtered_objects)):
-        if filtered_mask[object_index] == True:
-            # get all values from the filtered object list
-            xmin = filtered_objects[object_index][0]
-            ymin = filtered_objects[object_index][1]
-            xmax = filtered_objects[object_index][2]
-            ymax = filtered_objects[object_index][3]
-            confidence = filtered_objects[object_index][4]
-            class_id = filtered_objects[object_index][5]
-            # Set up the text for display
-            cv2.rectangle(frame,(xmin, ymin), (xmax, ymin+20), LABEL_BG_COLOR, -1)
-            cv2.putText(frame, labels[class_id] + ': %.2f' % confidence, (xmin+5, ymin+15), TEXT_FONT, 0.5, TEXT_COLOR, 1)
-            # Set up the bounding box
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), BOX_COLOR, 1)
-    return frame
+    label_list = labels
+
+    # calculate the actual box coordinates in relation to the input image
+    print('\n Found this many objects in the image: ' + str(len(results)))
+    for box in results:
+        box_xmin = int((box[0] - box[2] / 2.0) * image_width)
+        box_xmax = int((box[0] + box[2] / 2.0) * image_width)
+        box_ymin = int((box[1] - box[3] / 2.0) * image_height)
+        box_ymax = int((box[1] + box[3] / 2.0) * image_height)
+        # ensure the box is not drawn out of the window resolution
+        if box_xmin < 0:
+            box_xmin = 0
+        if box_xmax > image_width:
+            box_xmax = image_width
+        if box_ymin < 0:
+            box_ymin = 0
+        if box_ymax > image_height:
+            box_ymax = image_height
+
+        print(" - object: " + YELLOW + label_list[box[4]] + NOCOLOR + " is at left: " + str(box_xmin) + " top: " + str(box_ymin) + " right: " + str(box_xmax) + " bottom: " + str(box_ymax))
+
+        # label shape and colorization
+        label_text = label_list[box[4]] + " " + str("{0:.2f}".format(box[5]*box[6]))
+        label_background_color = (70, 120, 70) # grayish green background for text
+        label_text_color = (255, 255, 255)   # white text
+
+        label_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+        label_left = int(box_xmin)
+        label_top = int(box_ymin) - label_size[1]
+        label_right = label_left + label_size[0]
+        label_bottom = label_top + label_size[1]
+
+        # set up the colored rectangle background for text
+        cv2.rectangle(original_img, (label_left - 1, label_top - 5),(label_right + 1, label_bottom + 1),
+                      label_background_color, -1)
+        # set up text
+        cv2.putText(original_img, label_text, (int(box_xmin), int(box_ymin - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    label_text_color, 1)
+        # set up the rectangle around the object
+        cv2.rectangle(original_img, (int(box_xmin), int(box_ymin)), (int(box_xmax), int(box_ymax)), (0, 255, 0), 2)
+
+    return original_img
 
 def decode_age_gender_recognition(nnet_packet):
     detections = []
@@ -539,7 +531,7 @@ if args['cnn_model'] == 'emotions-recognition-retail-0003':
     show_nn=show_emotion_recognition
     calc_dist_to_bb=False
 
-if args['cnn_model'] == 'tiny-yolo':
+if args['cnn_model'] == 'yolov2-tiny-voc':
     decode_nn=decode_tiny_yolo
     show_nn=show_tiny_yolo
     calc_dist_to_bb=False
