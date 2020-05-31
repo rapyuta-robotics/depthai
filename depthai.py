@@ -16,17 +16,32 @@ import consts.resource_paths
 from depthai_helpers import utils
 from depthai_helpers.cli_utils import cli_print, parse_args, PrintColors
 
+nnet2 = None
 
 def decode_mobilenet_ssd(nnet_packet):
     detections = []
     # the result of the MobileSSD has detection rectangles (here: entries), and we can iterate through them
-    for _, e in enumerate(nnet_packet.entries()):
+    global nnet2
+    nnet2 = nnet_packet.entries()
+    for _, e in enumerate(nnet2):
         # for MobileSSD entries are sorted by confidence
         # {id == -1} or {confidence == 0} is the stopper (special for OpenVINO models and MobileSSD architecture)
         if e[0]['id'] == -1.0 or e[0]['confidence'] == 0.0 or e[0]['label'] > len(labels):
             break
+        seqno = nnet_packet.entries().getSeqNo()
+        cli_print("python seq no: "+str(seqno)+" "+"appended tensor ", PrintColors.GREEN)
         # save entry for further usage (as image package may arrive not the same time as nnet package)
+        seqno = e[0].getSeqNo()
+        cli_print("python seq no: "+str(seqno)+" "+"tensor ", PrintColors.GREEN)
         detections.append(e)
+    seqno = nnet_packet.getSeqNo()
+    cli_print("python seq no: "+str(seqno)+" "+"decoded metaout ", PrintColors.GREEN)
+    if(nnet2 is not None):
+        seqno = nnet2.getSeqNo()
+        cli_print("python seq no: "+str(seqno)+" "+"read appended tensor ", PrintColors.GREEN)
+    else:
+        cli_print("1111111111python seq no:" ,PrintColors.GREEN)
+
     return detections
 
 
@@ -43,12 +58,21 @@ def average_depth_coord(pt1, pt2):
     avg_pt2 = (pt2[0] - x_shift), (pt2[1] - y_shift)
     return avg_pt1, avg_pt2
 
+
 def show_mobilenet_ssd(entries_prev, frame, is_depth=0):
     img_h = frame.shape[0]
     img_w = frame.shape[1]
     global config
     # iterate through pre-saved entries & draw rectangle & text on image:
     for e in entries_prev:
+        if(nnet2 is not None):
+            seqno = nnet2.getSeqNo()
+            cli_print("python seq no: "+str(seqno)+" "+"read appended tensor ", PrintColors.GREEN)
+        else:
+            cli_print("1111111111python seq no:" ,PrintColors.GREEN)
+
+        seqno = e[0].getSeqNo()
+        cli_print("python seq no: "+str(seqno)+" "+"tensor 2 ", PrintColors.GREEN)
         # the lower confidence threshold - the more we get false positives
         if e[0]['confidence'] > config['depth']['confidence_threshold']:
             if is_depth:
@@ -378,6 +402,8 @@ while True:
     
     packets_len = len(nnet_packets) + len(data_packets)
     if packets_len != 0:
+        print("packets_len" + str(packets_len))
+
         reset_process_wd()
     else:
         cur_time=monotonic()
@@ -386,13 +412,26 @@ while True:
             os._exit(10)
 
     for _, nnet_packet in enumerate(nnet_packets):
+        seqno = nnet_packet.getSeqNo()
+        if(seqno != 0):
+            cli_print("python seq no: "+str(seqno)+" "+"metoaut ", PrintColors.GREEN)
+
         entries_prev[nnet_packet.getMetadata().getCameraName()] = decode_nn(nnet_packet)
+        if(nnet2 is not None):
+            seqno = nnet2.getSeqNo()
+            cli_print("python seq no: "+str(seqno)+" "+"read appended tensor ", PrintColors.GREEN)
+        else:
+            cli_print("1111111111python seq no:" ,PrintColors.GREEN)
+
 
     for packet in data_packets:
         window_name = packet.stream_name
         if packet.stream_name not in stream_names:
             continue # skip streams that were automatically added
         packetData = packet.getData()
+        seqno = packet.getSeqNo()
+        if(seqno != 0):
+            cli_print("python seq no: "+str(seqno)+" "+packet.stream_name, PrintColors.RED)
         if packetData is None:
             print('Invalid packet data!')
             continue
@@ -475,6 +514,7 @@ while True:
             for w in stream_windows:
                 frame_count_prev[w] = frame_count[w]
                 frame_count[w] = 0
+
 
     key = cv2.waitKey(1)
     if key == ord('c'):
