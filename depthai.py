@@ -20,11 +20,7 @@ from depthai_helpers.cli_utils import cli_print, parse_args, PrintColors
 def decode_mobilenet_ssd(nnet_packet):
     detections = []
     # the result of the MobileSSD has detection rectangles (here: entries), and we can iterate through them
-    nnets = nnet_packet.entries()
-    print("len(nnets)" + str(len(nnets)))
-    for i in range(len(nnets)):
-
-        e = nnets[i]
+    for e in nnet_packet.entries():
         # for MobileSSD entries are sorted by confidence
         # {id == -1} or {confidence == 0} is the stopper (special for OpenVINO models and MobileSSD architecture)
         if e[0]['id'] == -1.0 or e[0]['confidence'] == 0.0 or e[0]['label'] > len(labels):
