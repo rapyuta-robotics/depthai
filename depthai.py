@@ -20,11 +20,18 @@ from depthai_helpers.cli_utils import cli_print, parse_args, PrintColors
 def decode_mobilenet_ssd(nnet_packet):
     detections = []
     # the result of the MobileSSD has detection rectangles (here: entries), and we can iterate through them
-    for _, e in enumerate(nnet_packet.entries()):
+    nnets = nnet_packet.entries()
+    print("len(nnets)" + str(len(nnets)))
+    for i in range(len(nnets)):
+
+        e = nnets[i]
         # for MobileSSD entries are sorted by confidence
         # {id == -1} or {confidence == 0} is the stopper (special for OpenVINO models and MobileSSD architecture)
         if e[0]['id'] == -1.0 or e[0]['confidence'] == 0.0 or e[0]['label'] > len(labels):
             break
+        if e[0]['confidence'] > config['depth']['confidence_threshold']:
+            cli_print("conf  label  "+str(e[0]['confidence']) + " " + labels[int(e[0]['label'])], PrintColors.GREEN)
+
         # save entry for further usage (as image package may arrive not the same time as nnet package)
         detections.append(e)
     return detections
@@ -46,11 +53,14 @@ def average_depth_coord(pt1, pt2):
 def show_mobilenet_ssd(entries_prev, frame, is_depth=0):
     img_h = frame.shape[0]
     img_w = frame.shape[1]
+   
     global config
     # iterate through pre-saved entries & draw rectangle & text on image:
-    for e in entries_prev:
+    for i, e in enumerate(entries_prev):
         # the lower confidence threshold - the more we get false positives
         if e[0]['confidence'] > config['depth']['confidence_threshold']:
+            cli_print("show  label  "+str(e[0]['confidence']) + " " + labels[int(e[0]['label'])], PrintColors.RED)
+
             if is_depth:
                 pt1 = nn_to_depth_coord(e[0]['left'],  e[0]['top'])
                 pt2 = nn_to_depth_coord(e[0]['right'], e[0]['bottom'])
@@ -384,9 +394,11 @@ while True:
         if cur_time > wd_cutoff:
             print("process watchdog timeout")
             os._exit(10)
-
+    
     for _, nnet_packet in enumerate(nnet_packets):
-        entries_prev[nnet_packet.getMetadata().getCameraName()] = decode_nn(nnet_packet)
+        if nnet_packet.getMetadata().getCameraName() == "left":
+            print("decode")
+            entries_prev[nnet_packet.getMetadata().getCameraName()] = decode_nn(nnet_packet)
 
     for packet in data_packets:
         window_name = packet.stream_name
@@ -405,7 +417,8 @@ while True:
             data1 = packetData[1,:,:]
             data2 = packetData[2,:,:]
             frame = cv2.merge([data0, data1, data2])
-
+            if camera == "left":
+                print("show ")
             nn_frame = show_nn(entries_prev[camera], frame)
             cv2.putText(nn_frame, "fps: " + str(frame_count_prev[window_name]), (25, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
             cv2.imshow(window_name, nn_frame)
