@@ -20,11 +20,7 @@ from depthai_helpers.cli_utils import cli_print, parse_args, PrintColors
 def decode_mobilenet_ssd(nnet_packet):
     detections = []
     # the result of the MobileSSD has detection rectangles (here: entries), and we can iterate through them
-    nnets = nnet_packet.entries()
-    print("len(nnets)" + str(len(nnets)))
-    for i in range(len(nnets)):
-
-        e = nnets[i]
+    for e in nnet_packet.entries():
         # for MobileSSD entries are sorted by confidence
         # {id == -1} or {confidence == 0} is the stopper (special for OpenVINO models and MobileSSD architecture)
         if e[0]['id'] == -1.0 or e[0]['confidence'] == 0.0 or e[0]['label'] > len(labels):
@@ -359,12 +355,15 @@ nn2depth = depthai.get_nn_to_depth_bbox_mapping()
 t_start = time()
 frame_count = {}
 frame_count_prev = {}
-entries_prev = {}
+nnet_prev = {}
+nnet_prev["entries_prev"] = {}
+nnet_prev["nnet_source"] = {}
 for s in stream_names:
     stream_windows = []
     if s == 'previewout':
         for cam in {'rgb', 'left', 'right'}:
-            entries_prev[cam] = []
+            nnet_prev["entries_prev"][cam] = []
+            nnet_prev["nnet_source"][cam] = []
             stream_windows.append(s + '-' + cam)
     else:
         stream_windows.append(s)
@@ -398,7 +397,8 @@ while True:
     for _, nnet_packet in enumerate(nnet_packets):
         if nnet_packet.getMetadata().getCameraName() == "left":
             print("decode")
-            entries_prev[nnet_packet.getMetadata().getCameraName()] = decode_nn(nnet_packet)
+            nnet_prev["nnet_source"][nnet_packet.getMetadata().getCameraName()] = nnet_packet
+            nnet_prev["entries_prev"][nnet_packet.getMetadata().getCameraName()] = decode_nn(nnet_packet)
 
     for packet in data_packets:
         window_name = packet.stream_name
@@ -419,7 +419,7 @@ while True:
             frame = cv2.merge([data0, data1, data2])
             if camera == "left":
                 print("show ")
-            nn_frame = show_nn(entries_prev[camera], frame)
+            nn_frame = show_nn(nnet_prev["entries_prev"][camera], frame)
             cv2.putText(nn_frame, "fps: " + str(frame_count_prev[window_name]), (25, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
             cv2.imshow(window_name, nn_frame)
         elif packet.stream_name == 'left' or packet.stream_name == 'right' or packet.stream_name == 'disparity':
@@ -428,7 +428,7 @@ while True:
             cv2.putText(frame_bgr, "fps: " + str(frame_count_prev[window_name]), (25, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
             if args['draw_bb_depth']:
                 camera = packet.getMetadata().getCameraName()
-                show_nn(entries_prev[camera], frame_bgr, is_depth=True)
+                show_nn(nnet_prev["entries_prev"][camera], frame_bgr, is_depth=True)
             cv2.imshow(window_name, frame_bgr)
         elif packet.stream_name.startswith('depth'):
             frame = packetData
@@ -450,7 +450,7 @@ while True:
 
             if args['draw_bb_depth']:
                 # TODO check NN cam input
-                show_nn(entries_prev['right'], frame, is_depth=True)
+                show_nn(nnet_prev["entries_prev"]['right'], frame, is_depth=True)
             cv2.imshow(window_name, frame)
 
         elif packet.stream_name == 'jpegout':
