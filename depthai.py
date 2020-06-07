@@ -17,6 +17,7 @@ from depthai_helpers.cli_utils import cli_print, parse_args, PrintColors
 
 from depthai_helpers.object_tracker_handler import show_tracklets
 
+
 global args, cnn_model2
 try:
     args = vars(parse_args())
@@ -293,7 +294,7 @@ if 'depth_raw' in config['streams'] and ('disparity_color' in config['streams'] 
 # Append video stream if video recording was requested and stream is not already specified
 video_file = None
 if args['video'] is not None:
-    
+
     # open video file
     try:
         video_file = open(args['video'], 'wb')
@@ -303,7 +304,7 @@ if args['video'] is not None:
         print("Error: couldn't open video file for writing. Disabled video output stream")
         if config['streams'].count('video') == 1:
             config['streams'].remove('video')
-    
+
 
 stream_names = [stream if isinstance(stream, str) else stream['name'] for stream in config['streams']]
 
@@ -383,7 +384,7 @@ while True:
     # retreive data from the device
     # data is stored in packets, there are nnet (Neural NETwork) packets which have additional functions for NNet result interpretation
     nnet_packets, data_packets = p.get_available_nnet_and_data_packets()
-    
+
     packets_len = len(nnet_packets) + len(data_packets)
     if packets_len != 0:
         reset_process_wd()
@@ -391,7 +392,7 @@ while True:
         cur_time=monotonic()
         if cur_time > wd_cutoff:
             print("process watchdog timeout")
-            os._exit(1)
+            os._exit(10)
 
     for _, nnet_packet in enumerate(nnet_packets):
         camera = nnet_packet.getMetadata().getCameraName()
@@ -470,7 +471,7 @@ while True:
         elif packet.stream_name == 'video':
             videoFrame = packetData
             videoFrame.tofile(video_file)
-        
+
         elif packet.stream_name == 'meta_d2h':
             str_ = packet.getDataAsStr()
             dict_ = json.loads(str_)
@@ -524,4 +525,3 @@ if video_file is not None:
     video_file.close()
 
 print('py: DONE.')
-
