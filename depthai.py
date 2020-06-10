@@ -437,6 +437,7 @@ while True:
 
     for packet in data_packets:
         if packet.stream_name not in stream_names:
+            print('Invalid packet stream name!' + packet.stream_name)
             continue # skip streams that were automatically added
         packetData = packet.getData()
         if packetData is None:
