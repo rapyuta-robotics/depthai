@@ -456,7 +456,7 @@ while True:
                 nn_frame = show_tracklets(tracklets, nn_frame)
             cv2.putText(nn_frame, "fps: " + str(frame_count_prev[packet.stream_name]), (25, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
             cv2.imshow('previewout', nn_frame)
-            cv2.moveWindow("previewout", 1100, 300)
+            cv2.moveWindow("previewout", 1100, 200)
         elif packet.stream_name == 'left' or packet.stream_name == 'right' or packet.stream_name == 'disparity':
             frame_bgr = packetData
             cv2.putText(frame_bgr, packet.stream_name, (25, 25), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0))
