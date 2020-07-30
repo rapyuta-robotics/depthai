@@ -12,7 +12,7 @@ class YoloParams:
     def __init__(self, side):
         self.num = 3 
         self.coords = 4 
-        self.classes = 3
+        self.classes = 80
         self.anchors = [10,14, 23,27, 37,58, 81,82, 135,169, 344,319]
 
         if side ==26:
@@ -20,6 +20,7 @@ class YoloParams:
             self.num = len(mask)
         else:
             mask=[3,4,5]
+            self.num = len(mask)
         maskedAnchors = []
         for idx in mask:
             maskedAnchors += [self.anchors[idx * 2], self.anchors[idx * 2 + 1]]
@@ -120,7 +121,10 @@ def decode_tiny_yolo(nnet_packet, **kwargs):
     raw_detections = nnet_packet.get_tensor("out")
     raw_detections.dtype = np.float16
     NN_outputs = nnet_packet.entries()[0]
-    output_shapes = [(1, 24, 26, 26), (1, 24, 13, 13)]
+    output_shapes = [(1, 255, 26, 26), (1, 255, 13, 13)]
+
+    result1 = np.prod(output_shapes[0]) 
+
 
     NN_output_list = []
 
@@ -130,7 +134,8 @@ def decode_tiny_yolo(nnet_packet, **kwargs):
         output = raw_detections[prev_offset:prev_offset+n_size]
         output = np.reshape(output, output_shapes[i])
         NN_output_list.append(output)
-        prev_offset += n_size
+        prev_offset += n_size+4
+        # break
   
     #render_time = 0
     #parsing_time = 0
