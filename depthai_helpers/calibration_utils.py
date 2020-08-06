@@ -129,6 +129,15 @@ class StereoCalibration(object):
             ret_l, corners_l = cv2.findChessboardCorners(img_l, (9, 6), flags)
             ret_r, corners_r = cv2.findChessboardCorners(img_r, (9, 6), flags)
 
+            img_pt_l = cv2.drawChessboardCorners(np.dstack([img_l, img_l, img_l]), (9, 6), corners_l ,True)
+            img_pt_r = cv2.drawChessboardCorners(np.dstack([img_r, img_r, img_r]), (9, 6), corners_r ,True)
+            cv2.imwrite(image_left.replace('.png', '_pts.png'), img_pt_l)
+            cv2.imwrite(image_right.replace('.png', '_pts.png'), img_pt_r)
+            cv2.imshow("points", np.hstack([img_pt_l, img_pt_r]))
+            cv2.waitKey(0)
+            cv2.destroyWindow("points")
+
+
             # termination criteria
             self.criteria = (cv2.TERM_CRITERIA_MAX_ITER +
                              cv2.TERM_CRITERIA_EPS, 30, 0.001)
@@ -179,9 +188,9 @@ class StereoCalibration(object):
         flags = 0
         #flags |= cv2.CALIB_FIX_ASPECT_RATIO
         flags |= cv2.CALIB_USE_INTRINSIC_GUESS
-        #flags |= cv2.CALIB_SAME_FOCAL_LENGTH
-        #flags |= cv2.CALIB_ZERO_TANGENT_DIST
-        flags |= cv2.CALIB_RATIONAL_MODEL
+        # flags |= cv2.CALIB_SAME_FOCAL_LENGTH
+        # flags |= cv2.CALIB_ZERO_TANGENT_DIST
+        #flags |= cv2.CALIB_RATIONAL_MODEL
         #flags |= cv2.CALIB_FIX_K1
         #flags |= cv2.CALIB_FIX_K2
         #flags |= cv2.CALIB_FIX_K3
@@ -196,6 +205,12 @@ class StereoCalibration(object):
             self.objpoints, self.imgpoints_l, self.imgpoints_r,
             self.M1, self.d1, self.M2, self.d2, self.img_shape,
             criteria=stereocalib_criteria, flags=flags)
+
+        print("calibration error: " + str(ret))
+        print("calibration R: \n" + str(R))
+        print("calibration T: \n" + str(T))
+        print("calibration E: \n" + str(E))
+        print("calibration F: \n" + str(F))
 
         assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
         print("[OK] Calibration successful w/ RMS error=" + str(ret))
