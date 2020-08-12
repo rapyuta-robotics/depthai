@@ -405,7 +405,13 @@ ops = 0
 prevTime = time()
 
 img_l, img_r, img_d = None, None, None
-image_count = 57
+if len(os.listdir(out_dir)) == 0:
+    image_count = 0
+else:
+    image_count = 1 + max([int(f[f.find("_") + 1:f.rfind(".")]) for f in os.listdir(out_dir)])
+capture_time = -1.0
+prev_time = time()
+
 while True:
     # retreive data from the device
     # data is stored in packets, there are nnet (Neural NETwork) packets which have additional functions for NNet result interpretation
@@ -586,6 +592,10 @@ while True:
     elif key == ord('q'):
         break
 
+    new_time = time()
+    if (capture_time > 0.0 and new_time - prev_time > capture_time):
+        depthai.request_jpeg()
+        prev_time = new_time
 
 del p  # in order to stop the pipeline object should be deleted, otherwise device will continue working. This is required if you are going to add code after the main loop, otherwise you can ommit it.
 del device
