@@ -26,6 +26,10 @@ try:
 except:
     os._exit(2)
 
+out_dir = "captured_images"
+if not os.path.exists(out_dir):
+    os.mkdir(out_dir)
+
 compile_model = args['shaves'] is not None and args['cmx_slices'] is not None and args['NN_engines']
 
 stream_list = args['streams']
@@ -399,6 +403,9 @@ for stream in stream_names:
         cv2.setTrackbarPos(trackbar_name, stream, args['disparity_confidence_threshold'])
 ops = 0
 prevTime = time()
+
+img_l, img_r, img_d = None, None, None
+image_count = 57
 while True:
     # retreive data from the device
     # data is stored in packets, there are nnet (Neural NETwork) packets which have additional functions for NNet result interpretation
@@ -500,9 +507,25 @@ while True:
             jpg = packetData
             mat = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
             cv2.imshow('jpegout', mat)
+            if img_l is not None or img_r is not None or img_d is not None:
+                str_count = str(image_count).zfill(4)
+                cv2.imwrite(os.path.join(out_dir, "rgb_" + str_count + ".jpg"), mat)
+                if img_l is not None:
+                    cv2.imwrite(os.path.join(out_dir, "left_" + str_count + ".png"), img_l)
+                    img_l = None
+                if img_r is not None:
+                    cv2.imwrite(os.path.join(out_dir, "right_" + str_count + ".png"), img_r)
+                    img_r = None
+                if img_d is not None:
+                    np.save(os.path.join(out_dir, "depth_" + str_count + ".npy"), img_d)
+                    img_d = None
+
+
+                image_count += 1
+
 
         elif packet.stream_name == 'video':
-            videoFrame = packetData
+            videoFrame = packetDatadepth
             videoFrame.tofile(video_file)
             #mjpeg = packetData
             #mat = cv2.imdecode(mjpeg, cv2.IMREAD_COLOR)
@@ -519,6 +542,14 @@ while True:
                 ' DSS:' + '{:6.2f}'.format(dict_['sensors']['temperature']['upa1']))
         elif packet.stream_name == 'object_tracker':
             tracklets = packet.getObjectTracker()
+
+        if packet.stream_name in ("left", "right", "depth_raw"):
+            if packet.stream_name == "left":
+                img_l = packetData.copy()
+            elif packet.stream_name == "right":
+                img_r = packetData.copy()
+            elif packet.stream_name == "depth_raw":
+                img_d = packetData.copy()
 
         frame_count[window_name] += 1
 
