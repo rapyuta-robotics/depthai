@@ -131,11 +131,11 @@ class StereoCalibration(object):
 
             img_pt_l = cv2.drawChessboardCorners(np.dstack([img_l, img_l, img_l]), (9, 6), corners_l ,True)
             img_pt_r = cv2.drawChessboardCorners(np.dstack([img_r, img_r, img_r]), (9, 6), corners_r ,True)
-            cv2.imwrite(image_left.replace('.png', '_pts.png'), img_pt_l)
-            cv2.imwrite(image_right.replace('.png', '_pts.png'), img_pt_r)
-            cv2.imshow("points", np.hstack([img_pt_l, img_pt_r]))
-            cv2.waitKey(0)
-            cv2.destroyWindow("points")
+            # cv2.imwrite(image_left.replace('.png', '_pts.png'), img_pt_l)
+            # cv2.imwrite(image_right.replace('.png', '_pts.png'), img_pt_r)
+            # cv2.imshow("points", np.hstack([img_pt_l, img_pt_r]))
+            # cv2.waitKey(0)
+            # cv2.destroyWindow("points")
 
 
             # termination criteria
@@ -211,6 +211,11 @@ class StereoCalibration(object):
         print("calibration T: \n" + str(T))
         print("calibration E: \n" + str(E))
         print("calibration F: \n" + str(F))
+
+        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2)
+
+        R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(self.M1, self.d1, self.M2, self.d1, self.img_shape, R, T)
+        np.savez("extrinsics", R=R, T=T, R1=R1, R2=R2, P1=P1, P2=P2, Q=Q, roi1=roi1, roi2=roi2)
 
         assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
         print("[OK] Calibration successful w/ RMS error=" + str(ret))
