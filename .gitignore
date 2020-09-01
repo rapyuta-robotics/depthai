@@ -39,3 +39,8 @@ depthai.calib
 *.blob.sh*cmx*
 *.cmd
 *.so
+
+# image and depth data
+*.npy
+*.png
+*.jpg
