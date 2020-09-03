@@ -23,6 +23,7 @@ except ImportError:
     use_cv = False
 
 on_embedded = platform.machine().startswith('arm') or platform.machine().startswith('aarch64')
+show_size = (480, 270)
 
 
 def parse_args():
@@ -115,7 +116,7 @@ def ts(packet):
 
 
 class Main:
-    output_scale_factor = 0.5
+    output_scale_factor = 0.25
     cmd_file = consts.resource_paths.device_cmd_fpath
     polygons = None
     width = None
@@ -128,8 +129,8 @@ class Main:
         self.args = vars(parse_args())
         self.config = {
             'streams':
-                ['left', 'right'] if not on_embedded else
-                [{'name': 'left', "max_fps": 10.0}, {'name': 'right', "max_fps": 10.0}],
+                ['left', 'right', 'jpegout'] if not on_embedded else
+                [{'name': 'left', "max_fps": 10.0}, {'name': 'right', "max_fps": 10.0}, {'name': 'jpegout', "max_fps": 10.0}],
             'depth':
                 {
                     'calibration_file': consts.resource_paths.calib_fpath,
@@ -189,8 +190,8 @@ class Main:
         pipeline = None
 
         try:
-            device = depthai.Device("", False)
-            pipeline = device.create_pipeline(self.config)
+            self.device = depthai.Device("", False)
+            pipeline = self.device.create_pipeline(self.config)
         except RuntimeError:
             raise RuntimeError("Unable to initialize device. Try to reset it")
 
@@ -258,20 +259,27 @@ class Main:
         capturing = False
         captured_left = False
         captured_right = False
+        captured_rgb = False
         tried_left = False
         tried_right = False
+        tried_rgb = False
         recent_left = None
         recent_right = None
+        recent_rgb = None
         with self.get_pipeline() as pipeline:
             while not finished:
+                self.device.request_jpeg()
                 _, data_list = pipeline.get_available_nnet_and_data_packets()
                 for packet in data_list:
                     if packet.stream_name == "left" and (recent_left is None or ts(recent_left) < ts(packet)):
                         recent_left = packet
                     elif packet.stream_name == "right" and (recent_right is None or ts(recent_right) < ts(packet)):
                         recent_right = packet
+                    elif packet.stream_name == "jpegout": # and (recent_rgb is None or ts(recent_rgb) < ts(packet)):
+                        # jpegout doesnot have MetaData
+                        recent_rgb = packet
 
-                if recent_left is None or recent_right is None:
+                if recent_left is None or recent_right is None or recent_rgb is None:
                     continue
 
                 key = cv2.waitKey(1)
@@ -283,24 +291,33 @@ class Main:
                     capturing = True
                 
                 frame_list = []
-                for packet in (recent_left, recent_right):
-                    frame = packet.getData()
-                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+                for packet in (recent_left, recent_right, recent_rgb):
+                    if packet.stream_name == "jpegout":
+                        frame = cv2.imdecode(packet.getData(), cv2.IMREAD_COLOR)
+                    else:
+                        frame = packet.getData()
+
+                    if packet in (recent_left, recent_right):
+                        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
 
                     if self.polygons is None:
                         self.height, self.width, _ = frame.shape
                         self.polygons = setPolygonCoordinates(self.height, self.width)
 
-                    if capturing and abs(ts(recent_left) - ts(recent_right)) < 0.001:
+                    if capturing and abs(ts(recent_left) - ts(recent_right)) < 0.001: # no timestamp for rgb
                         if packet.stream_name == 'left' and not tried_left:
                             captured_left = self.parse_frame(frame, packet.stream_name)
                             tried_left = True
                         elif packet.stream_name == 'right' and not tried_right:
                             captured_right = self.parse_frame(frame, packet.stream_name)
                             tried_right = True
+                        elif packet.stream_name == 'jpegout' and not tried_rgb:
+                            captured_rgb = self.parse_frame(frame, packet.stream_name)
+                            tried_rgb = True
 
                     has_success = (packet.stream_name == "left" and captured_left) or \
-                                  (packet.stream_name == "right" and captured_right)
+                                  (packet.stream_name == "right" and captured_right) or \
+                                  (packet.stream_name == "jpegout" and captured_rgb)
 
                     if self.args['invert_v'] and self.args['invert_h']:
                         frame = cv2.flip(frame, -1)
@@ -309,39 +326,44 @@ class Main:
                     elif self.args['invert_h']:
                         frame = cv2.flip(frame, 1)
 
-                    cv2.putText(
-                        frame,
-                        "Polygon Position: {}. Captured {} of {} images.".format(
-                            self.current_polygon + 1, self.images_captured, self.total_images
-                        ),
-                        (0, 700), cv2.FONT_HERSHEY_TRIPLEX, 1.0, (255, 0, 0)
-                    )
-                    if self.polygons is not None:
-                        cv2.polylines(
-                            frame, np.array([self.polygons[self.current_polygon]]),
-                            True, (0, 255, 0) if has_success else (0, 0, 255), 4
+                    if packet.stream_name != "jpegout":
+                        cv2.putText(
+                            frame,
+                            "Polygon Position: {}. Captured {} of {} images.".format(
+                                self.current_polygon + 1, self.images_captured, self.total_images
+                            ),
+                            (0, 700), cv2.FONT_HERSHEY_TRIPLEX, 1.0, (255, 0, 0)
                         )
+                        if self.polygons is not None:
+                            cv2.polylines(
+                                frame, np.array([self.polygons[self.current_polygon]]),
+                                True, (0, 255, 0) if has_success else (0, 0, 255), 4
+                            )
 
-                    small_frame = cv2.resize(frame, (0, 0), fx=self.output_scale_factor, fy=self.output_scale_factor)
+                    small_frame = cv2.resize(frame, show_size)
                     # cv2.imshow(packet.stream_name, small_frame)
                     frame_list.append(small_frame)
 
-                    if captured_left and captured_right:
+                    if captured_left and captured_right and captured_rgb:
                         self.images_captured += 1
                         self.images_captured_polygon += 1
                         capturing = False
                         tried_left = False
                         tried_right = False
+                        tried_rgb = False
                         captured_left = False
                         captured_right = False
+                        captured_rgb = False
 
-                    elif tried_left and tried_right:
+                    elif tried_left and tried_right and tried_rgb:
                         self.show_failed_capture_frame()
                         capturing = False
                         tried_left = False
                         tried_right = False
+                        tried_rgb = False
                         captured_left = False
                         captured_right = False
+                        captured_rgb = False
                         break
 
                     if self.images_captured_polygon == self.args['count']:
@@ -354,9 +376,9 @@ class Main:
                             break
                 
                 # combine_img = np.hstack((frame_list[0], frame_list[1]))
-                combine_img = np.vstack((frame_list[0], frame_list[1]))
+                combine_img = np.vstack((frame_list[0], frame_list[1], frame_list[2]))
 
-                cv2.imshow("left + right",combine_img)
+                cv2.imshow("left + right + rgb",combine_img)
                 frame_list.clear()
 
     def calibrate(self):
@@ -376,6 +398,7 @@ class Main:
                     shutil.rmtree('dataset/')
                 Path("dataset/left").mkdir(parents=True, exist_ok=True)
                 Path("dataset/right").mkdir(parents=True, exist_ok=True)
+                Path("dataset/jpegout").mkdir(parents=True, exist_ok=True)
             except OSError:
                 print("An error occurred trying to create image dataset directories!")
                 raise

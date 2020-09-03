@@ -594,7 +594,7 @@ while True:
 
     new_time = time()
     if (capture_time > 0.0 and new_time - prev_time > capture_time):
-        depthai.request_jpeg()
+        device.request_jpeg()
         prev_time = new_time
 
 del p  # in order to stop the pipeline object should be deleted, otherwise device will continue working. This is required if you are going to add code after the main loop, otherwise you can ommit it.
