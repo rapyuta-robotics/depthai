@@ -206,6 +206,7 @@ class Main:
         try:
             self.device = depthai.Device("", False)
             pipeline = self.device.create_pipeline(self.config)
+            self.device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
         except RuntimeError:
             raise RuntimeError("Unable to initialize device. Try to reset it")
 
