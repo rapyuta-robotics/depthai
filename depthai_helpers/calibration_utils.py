@@ -97,27 +97,36 @@ class StereoCalibration(object):
         self.objpoints = []  # 3d point in real world space
         self.imgpoints_l = []  # 2d points in image plane.
         self.imgpoints_r = []  # 2d points in image plane.
-        self.calib_successes = [] # polygon ids of left/right image sets with checkerboard corners.
+        self.imgpoints_rgb = []  # 2d points in image plane.
+        self.calib_successes_lr = [] # polygon ids of left/right image sets with checkerboard corners.
+        self.calib_successes_rgb = [] # polygon ids of left/rgb image sets with checkerboard corners.
 
         images_left = glob.glob(filepath + "/left/*")
         images_right = glob.glob(filepath + "/right/*")
+        images_rgb = glob.glob(filepath + "/jpegout/*")
         images_left.sort()
         images_right.sort()
+        images_rgb.sort()
 
         print("\nAttempting to read images for left camera from dir: " +
               filepath + "/left/")
         print("Attempting to read images for right camera from dir: " +
               filepath + "/right/")
+        print("Attempting to read images for right camera from dir: " +
+              filepath + "/jpegout/")
 
         assert len(images_left) != 0, "ERROR: Images not read correctly, check directory"
         assert len(images_right) != 0, "ERROR: Images not read correctly, check directory"
+        assert len(images_rgb) != 0, "ERROR: Images not read correctly, check directory"
 
-        for image_left, image_right in zip(images_left, images_right):
+        for image_left, image_right, image_rgb in zip(images_left, images_right, images_rgb):
             img_l = cv2.imread(image_left, 0)
             img_r = cv2.imread(image_right, 0)
+            img_rgb = cv2.imread(image_rgb)
 
             assert img_l is not None, "ERROR: Images not read correctly"
             assert img_r is not None, "ERROR: Images not read correctly"
+            assert img_rgb is not None, "ERROR: Images not read correctly"
 
             print("Finding chessboard corners for %s and %s..." % (os.path.basename(image_left), os.path.basename(image_right)))
             start_time = time.time()
@@ -128,38 +137,48 @@ class StereoCalibration(object):
             flags |= cv2.CALIB_CB_NORMALIZE_IMAGE
             ret_l, corners_l = cv2.findChessboardCorners(img_l, (9, 6), flags)
             ret_r, corners_r = cv2.findChessboardCorners(img_r, (9, 6), flags)
+            ret_rgb, corners_rgb = cv2.findChessboardCorners(cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY), (9, 6), flags)
 
             img_pt_l = cv2.drawChessboardCorners(np.dstack([img_l, img_l, img_l]), (9, 6), corners_l ,True)
             img_pt_r = cv2.drawChessboardCorners(np.dstack([img_r, img_r, img_r]), (9, 6), corners_r ,True)
+            img_pt_rgb = cv2.drawChessboardCorners(img_rgb, (9, 6), corners_rgb ,True)
+            img_pt_rgb = cv2.resize(img_pt_rgb, (img_pt_l.shape[1], img_pt_l.shape[0]))
             # cv2.imwrite(image_left.replace('.png', '_pts.png'), img_pt_l)
             # cv2.imwrite(image_right.replace('.png', '_pts.png'), img_pt_r)
-            # cv2.imshow("points", np.hstack([img_pt_l, img_pt_r]))
+
+            # cv2.imshow("points", np.hstack([img_pt_l, img_pt_r, img_pt_rgb]))
             # cv2.waitKey(0)
             # cv2.destroyWindow("points")
-
 
             # termination criteria
             self.criteria = (cv2.TERM_CRITERIA_MAX_ITER +
                              cv2.TERM_CRITERIA_EPS, 30, 0.001)
 
             # if corners are found in both images, refine and add data
-            if ret_l and ret_r:
+            if (ret_l and ret_r and ret_rgb):
                 self.objpoints.append(self.objp)
                 rt = cv2.cornerSubPix(img_l, corners_l, (5, 5),
                                       (-1, -1), self.criteria)
                 self.imgpoints_l.append(corners_l)
+
                 rt = cv2.cornerSubPix(img_r, corners_r, (5, 5),
                                       (-1, -1), self.criteria)
                 self.imgpoints_r.append(corners_r)
-                self.calib_successes.append(polygon_from_image_name(image_left))
+
+                rt = cv2.cornerSubPix(cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY), corners_rgb, (5, 5),
+                                      (-1, -1), self.criteria)
+                self.imgpoints_rgb.append(corners_rgb)
+
+                self.calib_successes_lr.append(polygon_from_image_name(image_left))
                 print("\t[OK]. Took %i seconds." % (round(time.time() - start_time, 2)))
             else:
                 print("\t[ERROR] - Corners not detected. Took %i seconds." % (round(time.time() - start_time, 2)))
 
-            self.img_shape = img_r.shape[::-1]
+            self.lr_shape = img_r.shape[::-1]
+            self.rgb_shape = img_rgb.shape[:2][::-1]
         print(str(len(self.objpoints)) + " of " + str(len(images_left)) +
               " images being used for calibration")
-        self.ensure_valid_images()
+        # self.ensure_valid_images()
 
     def ensure_valid_images(self):
         """
@@ -167,7 +186,7 @@ class StereoCalibration(object):
         AssertionError with instructions on re-running calibration for the invalid polygons.
         """
         expected_polygons = len(setPolygonCoordinates(1000,600)) # inseted values are placeholders
-        unique_calib_successes = set(self.calib_successes)
+        unique_calib_successes = set(self.calib_successes_lr)
         if len(unique_calib_successes) != expected_polygons:
             valid = set(np.arange(0,expected_polygons))
             missing = valid - unique_calib_successes
@@ -180,14 +199,18 @@ class StereoCalibration(object):
         """Calibrate camera and construct Homography."""
         # init camera calibrations
         rt, self.M1, self.d1, self.r1, self.t1 = cv2.calibrateCamera(
-            self.objpoints, self.imgpoints_l, self.img_shape, None, None)
+            self.objpoints, self.imgpoints_l, self.lr_shape, None, None)
         rt, self.M2, self.d2, self.r2, self.t2 = cv2.calibrateCamera(
-            self.objpoints, self.imgpoints_r, self.img_shape, None, None)
+            self.objpoints, self.imgpoints_r, self.lr_shape, None, None)
+        rt, self.M3, self.d3, self.r3, self.t3 = cv2.calibrateCamera(
+            self.objpoints, self.imgpoints_rgb, self.lr_shape, None, None)
+
+        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2, M3=self.M3, D3=self.d3)
 
         # config
         flags = 0
         #flags |= cv2.CALIB_FIX_ASPECT_RATIO
-        flags |= cv2.CALIB_USE_INTRINSIC_GUESS
+        # flags |= cv2.CALIB_USE_INTRINSIC_GUESS
         # flags |= cv2.CALIB_SAME_FOCAL_LENGTH
         # flags |= cv2.CALIB_ZERO_TANGENT_DIST
         #flags |= cv2.CALIB_RATIONAL_MODEL
@@ -197,27 +220,44 @@ class StereoCalibration(object):
         #flags |= cv2.CALIB_FIX_K4
         #flags |= cv2.CALIB_FIX_K5
         #flags |= cv2.CALIB_FIX_K6
+        flags |= cv2.CALIB_FIX_INTRINSIC
+
         stereocalib_criteria = (cv2.TERM_CRITERIA_COUNT +
                                 cv2.TERM_CRITERIA_EPS, 100, 1e-5)
 
         # stereo calibration procedure
-        ret, self.M1, self.d1, self.M2, self.d2, R, T, E, F = cv2.stereoCalibrate(
+        ret, self.M1, self.d1, self.M2, self.d2, R_lr, T_lr, E_lr, F_lr = cv2.stereoCalibrate(
             self.objpoints, self.imgpoints_l, self.imgpoints_r,
-            self.M1, self.d1, self.M2, self.d2, self.img_shape,
+            self.M1, self.d1, self.M2, self.d2, self.lr_shape,
             criteria=stereocalib_criteria, flags=flags)
 
-        print("calibration error: " + str(ret))
-        print("calibration R: \n" + str(R))
-        print("calibration T: \n" + str(T))
-        print("calibration E: \n" + str(E))
-        print("calibration F: \n" + str(F))
-
-        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2)
-
-        R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(self.M1, self.d1, self.M2, self.d1, self.img_shape, R, T)
-        np.savez("extrinsics", R=R, T=T, R1=R1, R2=R2, P1=P1, P2=P2, Q=Q, roi1=roi1, roi2=roi2)
+        print("calibration error (LR): " + str(ret))
+        print("calibration R (LR): \n" + str(R_lr))
+        print("calibration T (LR): \n" + str(T_lr))
+        print("calibration E (LR): \n" + str(E_lr))
+        print("calibration F (LR): \n" + str(F_lr))
 
         assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
+
+        ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, R_rgb, T_rgb, E_rgb, F_rgb = cv2.stereoCalibrate(
+            self.objpoints, self.imgpoints_l, self.imgpoints_rgb,
+            self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
+            criteria=stereocalib_criteria, flags=cv2.CALIB_FIX_INTRINSIC)
+
+        print("calibration error (RGB): " + str(ret))
+        print("calibration R (RGB): \n" + str(R_rgb))
+        print("calibration T (RGB): \n" + str(T_rgb))
+        print("calibration E (RGB): \n" + str(E_rgb))
+        print("calibration F (RGB): \n" + str(F_rgb))
+
+        R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(self.M1, self.d1, self.M2, self.d1, self.lr_shape, R_lr, T_lr)
+        np.savez("extrinsics", R=R_lr, T=T_lr, E=E_lr, F=F_lr,
+                R1=R1, R2=R2, P1=P1, P2=P2, Q=Q, roi1=roi1, roi2=roi2)
+        np.savez("extrinsics_rgb", R=R_rgb, T=T_rgb, E=E_rgb, F=F_rgb)
+
+        # Error can be large because the rgb image is not synchronized
+        # assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
+
         print("[OK] Calibration successful w/ RMS error=" + str(ret))
 
         # construct Homography
@@ -225,11 +265,11 @@ class StereoCalibration(object):
         #TODO: Need to understand effect of plane_depth. Why does this improve some boards' cals?
         n = np.array([[0.0], [0.0], [-1.0]])
         d_inv = 1.0 / plane_depth
-        H = (R - d_inv * np.dot(T, n.transpose()))
+        H = (R_lr - d_inv * np.dot(T_lr, n.transpose()))
         self.H = np.dot(self.M2, np.dot(H, np.linalg.inv(self.M1)))
         self.H /= self.H[2, 2]
         # rectify Homography for right camera
-        disparity = (self.M1[0, 0] * T[0] / plane_depth)
+        disparity = (self.M1[0, 0] * T_lr[0] / plane_depth)
         self.H[0, 2] -= disparity
         self.H = self.H.astype(np.float32)
         print("Rectifying Homography...")
