@@ -205,12 +205,10 @@ class StereoCalibration(object):
         rt, self.M3, self.d3, self.r3, self.t3 = cv2.calibrateCamera(
             self.objpoints, self.imgpoints_rgb, self.lr_shape, None, None)
 
-        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2, M3=self.M3, D3=self.d3)
-
         # config
         flags = 0
         #flags |= cv2.CALIB_FIX_ASPECT_RATIO
-        # flags |= cv2.CALIB_USE_INTRINSIC_GUESS
+        flags |= cv2.CALIB_USE_INTRINSIC_GUESS
         # flags |= cv2.CALIB_SAME_FOCAL_LENGTH
         # flags |= cv2.CALIB_ZERO_TANGENT_DIST
         #flags |= cv2.CALIB_RATIONAL_MODEL
@@ -220,17 +218,44 @@ class StereoCalibration(object):
         #flags |= cv2.CALIB_FIX_K4
         #flags |= cv2.CALIB_FIX_K5
         #flags |= cv2.CALIB_FIX_K6
-        flags |= cv2.CALIB_FIX_INTRINSIC
+        #flags |= cv2.CALIB_FIX_INTRINSIC
 
         stereocalib_criteria = (cv2.TERM_CRITERIA_COUNT +
                                 cv2.TERM_CRITERIA_EPS, 100, 1e-5)
 
-        # stereo calibration procedure
+        # stereo calibration procedure (init)
         ret, self.M1, self.d1, self.M2, self.d2, R_lr, T_lr, E_lr, F_lr = cv2.stereoCalibrate(
             self.objpoints, self.imgpoints_l, self.imgpoints_r,
             self.M1, self.d1, self.M2, self.d2, self.lr_shape,
             criteria=stereocalib_criteria, flags=flags)
 
+        # stereo calibration procedure (L-RGB)
+        ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, R_l_rgb, T_l_rgb, E_l_rgb, F_l_rgb = cv2.stereoCalibrate(
+            self.objpoints, self.imgpoints_l, self.imgpoints_rgb,
+            self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
+            criteria=stereocalib_criteria, flags=flags)
+        print("calibration error (RGB): " + str(ret))
+        print("calibration R (L-RGB): \n" + str(R_l_rgb))
+        print("calibration T (L-RGB): \n" + str(T_l_rgb))
+        print("calibration E (L-RGB): \n" + str(E_l_rgb))
+        print("calibration F (L-RGB): \n" + str(F_l_rgb))
+
+        # stereo calibration procedure (R-RGB)
+        ret, self.M2_rgb, self.d2_rgb, self.M3, self.d3, R_r_rgb, T_r_rgb, E_r_rgb, F_r_rgb = cv2.stereoCalibrate(
+            self.objpoints, self.imgpoints_r, self.imgpoints_rgb,
+            self.M2, self.d2, self.M3, self.d3, self.lr_shape,
+            criteria=stereocalib_criteria, flags=flags)
+        print("calibration error (RGB): " + str(ret))
+        print("calibration R (R-RGB): \n" + str(R_r_rgb))
+        print("calibration T (R-RGB): \n" + str(T_r_rgb))
+        print("calibration E (R-RGB): \n" + str(E_r_rgb))
+        print("calibration F (R-RGB): \n" + str(F_r_rgb))
+
+        # stereo calibration procedure (init)
+        ret, self.M1, self.d1, self.M2, self.d2, R_lr, T_lr, E_lr, F_lr = cv2.stereoCalibrate(
+            self.objpoints, self.imgpoints_l, self.imgpoints_r,
+            self.M1, self.d1, self.M2, self.d2, self.lr_shape,
+            criteria=stereocalib_criteria, flags=flags)
         print("calibration error (LR): " + str(ret))
         print("calibration R (LR): \n" + str(R_lr))
         print("calibration T (LR): \n" + str(T_lr))
@@ -239,21 +264,14 @@ class StereoCalibration(object):
 
         assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
 
-        ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, R_rgb, T_rgb, E_rgb, F_rgb = cv2.stereoCalibrate(
-            self.objpoints, self.imgpoints_l, self.imgpoints_rgb,
-            self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
-            criteria=stereocalib_criteria, flags=cv2.CALIB_FIX_INTRINSIC)
-
-        print("calibration error (RGB): " + str(ret))
-        print("calibration R (RGB): \n" + str(R_rgb))
-        print("calibration T (RGB): \n" + str(T_rgb))
-        print("calibration E (RGB): \n" + str(E_rgb))
-        print("calibration F (RGB): \n" + str(F_rgb))
-
         R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(self.M1, self.d1, self.M2, self.d1, self.lr_shape, R_lr, T_lr)
-        np.savez("extrinsics", R=R_lr, T=T_lr, E=E_lr, F=F_lr,
+
+        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2, M3=self.M3, D3=self.d3)
+
+        np.savez("extrinsics_lr", R=R_lr, T=T_lr, E=E_lr, F=F_lr,
                 R1=R1, R2=R2, P1=P1, P2=P2, Q=Q, roi1=roi1, roi2=roi2)
-        np.savez("extrinsics_rgb", R=R_rgb, T=T_rgb, E=E_rgb, F=F_rgb)
+        np.savez("extrinsics_l_rgb", R=R_l_rgb, T=T_l_rgb, E=E_l_rgb, F=F_l_rgb)
+        np.savez("extrinsics_r_rgb", R=R_r_rgb, T=T_r_rgb, E=E_r_rgb, F=F_r_rgb)
 
         # Error can be large because the rgb image is not synchronized
         # assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
