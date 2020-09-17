@@ -346,6 +346,7 @@ if p is None:
     print('Pipeline is not created.')
     exit(3)
 
+device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
 nn2depth = device.get_nn_to_depth_bbox_mapping()
 
 
@@ -433,7 +434,7 @@ while True:
             print("process watchdog timeout")
             os._exit(10)
 
-    for _, nnet_packet in enumerate(nnet_packets):
+    for _, nnet_packet in enumerate(nnet_packets)AF_MODE_AUTO:
         meta = nnet_packet.getMetadata()
         camera = 'rgb'
         if meta != None:
@@ -585,6 +586,8 @@ while True:
             device.request_jpeg()
     elif key == ord('f'):
         device.request_af_trigger()
+    elif key == ord('0'):
+        device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
     elif key == ord('1'):
         device.request_af_mode(depthai.AutofocusMode.AF_MODE_AUTO)
     elif key == ord('2'):
