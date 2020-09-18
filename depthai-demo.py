@@ -434,7 +434,7 @@ while True:
             print("process watchdog timeout")
             os._exit(10)
 
-    for _, nnet_packet in enumerate(nnet_packets)AF_MODE_AUTO:
+    for _, nnet_packet in enumerate(nnet_packets):
         meta = nnet_packet.getMetadata()
         camera = 'rgb'
         if meta != None:
