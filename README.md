@@ -49,6 +49,14 @@ with the help of the `myriad_compile` tool. When producing blobs, the following 
 
        <path-to-openvino-folder>/deployment_tools/inference_engine/lib/intel64/myriad_compile -m ./ResNet50.xml -o ResNet50.blob -ip U8 -VPU_MYRIAD_PLATFORM VPU_MYRIAD_2480 -VPU_NUMBER_OF_SHAVES 4 -VPU_NUMBER_OF_CMX_SLICES 4
 
+## Image recording
+To record image launch from the main folder:
+```
+python3 test.py -s jpegout left right depth_raw
+```
+
+Camera will start recording RGB, left, right and depth images. Images will be stored under the caputered_imges folder. To control the image record time parameter go to depthai-demo.py and modify the capture_time parameter (e.g. capture_time = 1.0 means an image is stored every second).
+
 ## Reporting issues
 
 We are actively developing the DepthAI framework, and it's crucial for us to know what kind of problems you are facing.  
