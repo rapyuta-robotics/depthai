@@ -390,9 +390,11 @@ class Main:
         try:
             cal_data.calibrate("dataset", self.args['square_size_cm'], "./resources/depthai.calib", flags)
             camera_info.write_camera_info("camera_info_l.yaml", "left", (1280, 720),
-                              cal_data.M1, cal_data.d1, cal_data.P1, cal_data.R1)
+                              cal_data.M1, cal_data.d1)
             camera_info.write_camera_info("camera_info_r.yaml", "right", (1280, 720),
-                              cal_data.M2, cal_data.d2, cal_data.P2, cal_data.R2)
+                              cal_data.M2, cal_data.d2)
+            camera_info.write_camera_info("camera_info_rgb.yaml", "rgb", (1920, 1080),
+                              cal_data.M3, cal_data.d3)
 
         except AssertionError as e:
             print("[ERROR] " + str(e))
