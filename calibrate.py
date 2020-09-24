@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import depthai
 from depthai_helpers.calibration_utils import *
 from depthai_helpers import utils
+from depthai_helpers import camera_info
 import argparse
 from argparse import ArgumentParser
 import time
@@ -365,6 +366,11 @@ class Main:
         cal_data = StereoCalibration()
         try:
             cal_data.calibrate("dataset", self.args['square_size_cm'], "./resources/depthai.calib", flags)
+            camera_info.write_camera_info("camera_info_l.yaml", "left", (1280, 720),
+                              cal_data.M1, cal_data.d1, cal_data.P1, cal_data.R1)
+            camera_info.write_camera_info("camera_info_r.yaml", "right", (1280, 720),
+                              cal_data.M2, cal_data.d2, cal_data.P2, cal_data.R2)
+
         except AssertionError as e:
             print("[ERROR] " + str(e))
             raise SystemExit(1)
