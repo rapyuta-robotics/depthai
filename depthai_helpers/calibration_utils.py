@@ -367,13 +367,9 @@ class StereoCalibration(object):
 
             # show image
             print("Displaying Stereo Pair for visual inspection. Press the [ESC] key to exit.")
-            while(1):
-                cv2.imshow('Stereo Pair', img_concat)
-                k = cv2.waitKey(33)
-                if k == 32:    # Esc key to stop
-                    break
-                elif k == 27:
-                    os._exit(0)
-                    # raise SystemExit()
-                elif k == -1:  # normally -1 returned,so don't print it
-                    continue
+            cv2.imshow('Stereo Pair', img_concat)
+            k = cv2.waitKey(0)
+            if k == 27:
+                break
+
+        cv2.destroyWindow('Stereo Pair')
