@@ -24,6 +24,10 @@ try:
 except:
     os._exit(2)
 
+out_dir = "captured_images"
+if not os.path.exists(out_dir):
+    os.mkdir(out_dir)
+
 compile_model = args['shaves'] is not None and args['cmx_slices'] is not None and args['NN_engines']
 
 stream_list = args['streams']
@@ -409,6 +413,16 @@ for stream in stream_names:
 right_rectified = None
 pcl_not_set = True
 
+prevTime = time()
+
+img_l, img_r, img_d = None, None, None
+if len(os.listdir(out_dir)) == 0:
+    image_count = 0
+else:
+    image_count = 1 + max([int(f[f.find("_") + 1:f.rfind(".")]) for f in os.listdir(out_dir)])
+capture_time = -1.0
+prev_time = time()
+
 while True:
     # retreive data from the device
     # data is stored in packets, there are nnet (Neural NETwork) packets which have additional functions for NNet result interpretation
@@ -511,6 +525,21 @@ while True:
             jpg = packetData
             mat = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
             cv2.imshow('jpegout', mat)
+            if img_l is not None or img_r is not None or img_d is not None:
+                str_count = str(image_count).zfill(4)
+                cv2.imwrite(os.path.join(out_dir, "rgb_" + str_count + ".jpg"), mat)
+                if img_l is not None:
+                    cv2.imwrite(os.path.join(out_dir, "left_" + str_count + ".png"), img_l)
+                    img_l = None
+                if img_r is not None:
+                    cv2.imwrite(os.path.join(out_dir, "right_" + str_count + ".png"), img_r)
+                    img_r = None
+                if img_d is not None:
+                    np.save(os.path.join(out_dir, "depth_" + str_count + ".npy"), img_d)
+                    img_d = None
+
+
+                image_count += 1
 
         elif packet.stream_name == 'video':
             videoFrame = packetData
@@ -527,6 +556,14 @@ while True:
                 ' DSS:' + '{:6.2f}'.format(dict_['sensors']['temperature']['upa1']))
         elif packet.stream_name == 'object_tracker':
             tracklets = packet.getObjectTracker()
+
+        if packet.stream_name in ("left", "right", "depth_raw"):
+            if packet.stream_name == "left":
+                img_l = packetData.copy()
+            elif packet.stream_name == "right":
+                img_r = packetData.copy()
+            elif packet.stream_name == "depth_raw":
+                img_d = packetData.copy()
 
         frame_count[window_name] += 1
 
@@ -550,19 +587,28 @@ while True:
 
     key = cv2.waitKey(1)
     if key == ord('c'):
-        depthai.request_jpeg()
+        if 'jpegout' in stream_names == 0:
+            print("'jpegout' stream not enabled. Try settings -s jpegout to enable it")
+        else:
+            device.request_jpeg()
     elif key == ord('f'):
-        depthai.request_af_trigger()
+        device.request_af_trigger()
+    elif key == ord('0'):
+        device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
     elif key == ord('1'):
-        depthai.request_af_mode(depthai.AutofocusMode.AF_MODE_AUTO)
+        device.request_af_mode(depthai.AutofocusMode.AF_MODE_AUTO)
     elif key == ord('2'):
-        depthai.request_af_mode(depthai.AutofocusMode.AF_MODE_CONTINUOUS_VIDEO)
+        device.request_af_mode(depthai.AutofocusMode.AF_MODE_CONTINUOUS_VIDEO)
     elif key == ord('q'):
         break
 
+    new_time = time()
+    if (capture_time > 0.0 and new_time - prev_time > capture_time):
+        device.request_jpeg()
+        prev_time = new_time
 
 del p  # in order to stop the pipeline object should be deleted, otherwise device will continue working. This is required if you are going to add code after the main loop, otherwise you can ommit it.
-depthai.deinit_device()
+del device
 
 # Close video output file if was opened
 if video_file is not None:
