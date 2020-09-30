@@ -303,6 +303,8 @@ class StereoCalibration(object):
         self.H1 = np.matmul(np.matmul(self.M1, self.R1), np.linalg.inv(self.M1))
         self.H2 = np.matmul(np.matmul(self.M1, self.R2), np.linalg.inv(self.M2))                                                                                        
 
+        # np.savez("rectification", H1=self.H1, R1=self.R1, H2=self.H2, R2=self.R2)
+
 
     def create_save_mesh(self): #, output_path):
         
