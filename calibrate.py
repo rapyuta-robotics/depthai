@@ -24,6 +24,7 @@ except ImportError:
     use_cv = False
 
 on_embedded = platform.machine().startswith('arm') or platform.machine().startswith('aarch64')
+show_size = (480, 270)
 
 
 def parse_args():
@@ -116,7 +117,7 @@ def ts(packet):
 
 
 class Main:
-    output_scale_factor = 0.5
+    output_scale_factor = 0.25
     cmd_file = consts.resource_paths.device_cmd_fpath
     polygons = None
     width = None
@@ -190,8 +191,9 @@ class Main:
         pipeline = None
 
         try:
-            device = depthai.Device("", False)
-            pipeline = device.create_pipeline(self.config)
+            self.device = depthai.Device("", False)
+            pipeline = self.device.create_pipeline(self.config)
+            self.device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
         except RuntimeError:
             raise RuntimeError("Unable to initialize device. Try to reset it")
 

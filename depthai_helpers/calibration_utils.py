@@ -196,6 +196,14 @@ class StereoCalibration(object):
             flags |= cv2.CALIB_CB_NORMALIZE_IMAGE
             ret_l, corners_l = cv2.findChessboardCorners(img_l, (9, 6), flags)
             ret_r, corners_r = cv2.findChessboardCorners(img_r, (9, 6), flags)
+            img_pt_l = cv2.drawChessboardCorners(np.dstack([img_l, img_l, img_l]), (9, 6), corners_l ,True)
+            img_pt_r = cv2.drawChessboardCorners(np.dstack([img_r, img_r, img_r]), (9, 6), corners_r ,True)
+            # cv2.imwrite(image_left.replace('.png', '_pts.png'), img_pt_l)
+            # cv2.imwrite(image_right.replace('.png', '_pts.png'), img_pt_r)
+
+            # cv2.imshow("points", np.hstack([img_pt_l, img_pt_r, img_pt_rgb]))
+            # cv2.waitKey(0)
+            # cv2.destroyWindow("points")
 
             # termination criteria
             self.criteria = (cv2.TERM_CRITERIA_MAX_ITER +
@@ -207,6 +215,7 @@ class StereoCalibration(object):
                 rt = cv2.cornerSubPix(img_l, corners_l, (5, 5),
                                       (-1, -1), self.criteria)
                 self.imgpoints_l.append(corners_l)
+
                 rt = cv2.cornerSubPix(img_r, corners_r, (5, 5),
                                       (-1, -1), self.criteria)
                 self.imgpoints_r.append(corners_r)
@@ -249,15 +258,17 @@ class StereoCalibration(object):
         flags = 0
         #flags |= cv2.CALIB_FIX_ASPECT_RATIO
         flags |= cv2.CALIB_USE_INTRINSIC_GUESS
-        #flags |= cv2.CALIB_SAME_FOCAL_LENGTH
-        #flags |= cv2.CALIB_ZERO_TANGENT_DIST
-        flags |= cv2.CALIB_RATIONAL_MODEL
+        # flags |= cv2.CALIB_SAME_FOCAL_LENGTH
+        # flags |= cv2.CALIB_ZERO_TANGENT_DIST
+        #flags |= cv2.CALIB_RATIONAL_MODEL
         #flags |= cv2.CALIB_FIX_K1
         #flags |= cv2.CALIB_FIX_K2
         #flags |= cv2.CALIB_FIX_K3
         #flags |= cv2.CALIB_FIX_K4
         #flags |= cv2.CALIB_FIX_K5
         #flags |= cv2.CALIB_FIX_K6
+        #flags |= cv2.CALIB_FIX_INTRINSIC
+
         stereocalib_criteria = (cv2.TERM_CRITERIA_COUNT +
                                 cv2.TERM_CRITERIA_EPS, 100, 1e-5)
 
@@ -270,6 +281,10 @@ class StereoCalibration(object):
         assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
         print("[OK] Calibration successful w/ RMS error=" + str(ret))
 
+
+        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2)
+
+        np.savez("extrinsics", R=R, T=T, E=E, F=F)
         # construct Homography
         plane_depth = 40000000.0  # arbitrary plane depth 
         #TODO: Need to understand effect of plane_depth. Why does this improve some boards' cals?
@@ -322,8 +337,12 @@ class StereoCalibration(object):
                                                                                                 self.img_shape, self.R, self.T)
 
         self.H1 = np.matmul(np.matmul(self.M2, self.R1), np.linalg.inv(self.M1))
-        self.H2 = np.matmul(np.matmul(self.M2, self.R2), np.linalg.inv(self.M2))                                                                                        
-
+        self.H2 = np.matmul(np.matmul(self.M2, self.R2), np.linalg.inv(self.M2)) 
+                                                                                           
+        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2)
+        np.savez("extrinsics", R=self.R, T=self.T, E=E, F=F,
+                R1=self.R1, R2=self.R2, P1=self.P1, P2=self.P2, Q=self.Q, roi1=validPixROI1, roi2=validPixROI2)
+        np.savez("rectification", H1=self.H1, R1=self.R1, H2=self.H2, R2=self.R2)
 
     def create_save_mesh(self): #, output_path):
 
