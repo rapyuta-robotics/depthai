@@ -270,6 +270,9 @@ class StereoCalibration(object):
         assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
         print("[OK] Calibration successful w/ RMS error=" + str(ret))
 
+        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2)
+        np.savez("extrinsics", R=R, T=T, E=E, F=F)
+
         # construct Homography
         plane_depth = 40000000.0  # arbitrary plane depth 
         #TODO: Need to understand effect of plane_depth. Why does this improve some boards' cals?
@@ -323,6 +326,11 @@ class StereoCalibration(object):
 
         self.H1 = np.matmul(np.matmul(self.M2, self.R1), np.linalg.inv(self.M1))
         self.H2 = np.matmul(np.matmul(self.M2, self.R2), np.linalg.inv(self.M2))                                                                                        
+
+        np.savez("intrinsics", M1=self.M1, D1=self.d1, M2=self.M2, D2=self.d2)
+        np.savez("extrinsics", R=self.R, T=self.T, E=E, F=F,
+                R1=self.R1, R2=self.R2, P1=self.P1, P2=self.P2, Q=self.Q, roi1=validPixROI1, roi2=validPixROI2)
+        np.savez("rectification", H1=self.H1, R1=self.R1, H2=self.H2, R2=self.R2)
 
 
     def create_save_mesh(self): #, output_path):
