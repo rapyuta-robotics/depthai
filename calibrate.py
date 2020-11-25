@@ -418,7 +418,7 @@ class Main:
                     shutil.rmtree('dataset/')
                 Path("dataset/left").mkdir(parents=True, exist_ok=True)
                 Path("dataset/right").mkdir(parents=True, exist_ok=True)
-                Path("dataset/jpegout").mkdir(parents=True, exist_ok=True)
+                Path("dataset/rgb").mkdir(parents=True, exist_ok=True)
             except OSError:
                 print("An error occurred trying to create image dataset directories!")
                 raise

@@ -167,7 +167,7 @@ class StereoCalibration(object):
 
         images_left = glob.glob(filepath + "/left/*")
         images_right = glob.glob(filepath + "/right/*")
-        images_rgb = glob.glob(filepath + "/jpegout/*")
+        images_rgb = glob.glob(filepath + "/rgb/*")
         images_left.sort()
         images_right.sort()
         images_rgb.sort()
@@ -177,7 +177,7 @@ class StereoCalibration(object):
         print("Attempting to read images for right camera from dir: " +
               filepath + "/right/")
         print("Attempting to read images for right camera from dir: " +
-              filepath + "/jpegout/")
+              filepath + "/rgb/")
 
         assert len(images_left) != 0, "ERROR: Images not read correctly, check directory"
         assert len(images_right) != 0, "ERROR: Images not read correctly, check directory"
