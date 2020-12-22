@@ -85,14 +85,14 @@ class StereoCalibration(object):
         R2_fp32 = self.R2.astype(np.float32)
         M1_fp32 = self.M1.astype(np.float32)
         M2_fp32 = self.M2.astype(np.float32)
-        R_fp32  = self.R.astype(np.float32)
-        T_fp32  = self.T.astype(np.float32)
-        M3_fp32 = np.zeros((3, 3), dtype = np.float32)
-        R_rgb_fp32 = np.zeros((3, 3), dtype = np.float32) 
-        T_rgb_fp32 = np.zeros(3, dtype = np.float32)  
+        R_fp32  = self.R_lr.astype(np.float32)
+        T_fp32  = self.T_lr.astype(np.float32)
+        M3_fp32 = self.M1.astype(np.float32)
+        R_rgb_fp32 = self.R_r_rgb.astype(np.float32)
+        T_rgb_fp32 = self.T_r_rgb.astype(np.float32)
         d1_coeff_fp32 = self.d1.astype(np.float32)
         d2_coeff_fp32 = self.d2.astype(np.float32)
-        d3_coeff_fp32 = np.zeros(14, dtype = np.float32)
+        d3_coeff_fp32 = self.d3.astype(np.float32)
 
         with open(out_filepath, "wb") as fp:
             fp.write(R1_fp32.tobytes()) # goes to left camera
@@ -163,11 +163,11 @@ class StereoCalibration(object):
         self.imgpoints_r = []  # 2d points in image plane.
         self.imgpoints_rgb = []  # 2d points in image plane.
         self.calib_successes_lr = [] # polygon ids of left/right image sets with checkerboard corners.
-        self.calib_successes_rgb = [] # polygon ids of left/rgb image sets with checkerboard corners.
+        self.calib_successes_rgb = [] # polygon ids of left/video image sets with checkerboard corners.
 
         images_left = glob.glob(filepath + "/left/*")
         images_right = glob.glob(filepath + "/right/*")
-        images_rgb = glob.glob(filepath + "/rgb/*")
+        images_rgb = glob.glob(filepath + "/video/*")
         images_left.sort()
         images_right.sort()
         images_rgb.sort()
@@ -177,7 +177,7 @@ class StereoCalibration(object):
         print("Attempting to read images for right camera from dir: " +
               filepath + "/right/")
         print("Attempting to read images for right camera from dir: " +
-              filepath + "/rgb/")
+              filepath + "/video/")
 
         assert len(images_left) != 0, "ERROR: Images not read correctly, check directory"
         assert len(images_right) != 0, "ERROR: Images not read correctly, check directory"

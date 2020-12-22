@@ -309,11 +309,11 @@ class DepthConfigManager:
             #    'numBFrames': 0, (H264/H265 only)
             #    'quality': 80 # (0 - 100%) When using VBR or MJPEG profile
             #}
-            #'video_config':
-            #{
-            #    'profile': 'mjpeg',
-            #    'quality': 95
-            #}
+            'video_config':
+            {
+               'profile': 'mjpeg',
+               'quality': 95
+            }
         }
 
         self.jsonConfig = self.postProcessJsonConfig(config)
