@@ -206,6 +206,10 @@ class StereoCalibration(object):
             ret_r, corners_r = cv2.findChessboardCorners(img_r, (9, 6), flags)
             ret_rgb, corners_rgb = cv2.findChessboardCorners(cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY), (9, 6), flags)
 
+            # self.show_points(img_l, corners_l, ret_l, image_left)
+            # self.show_points(img_r, corners_r, ret_r, image_right)
+            # self.show_points(img_rgb, corners_rgb, ret_rgb, image_rgb)
+
             # termination criteria
             self.criteria = (cv2.TERM_CRITERIA_MAX_ITER +
                              cv2.TERM_CRITERIA_EPS, 30, 0.001)
@@ -885,10 +889,15 @@ class StereoCalibration(object):
                 elif k == -1:  # normally -1 returned,so don't print it
                     continue
 
+    def show_points(self, img, corners, ret, name):
+        img_draw = img.copy()
+        if img_draw.ndim == 2:
+            img_draw = cv2.cvtColor(img_draw, cv2.COLOR_GRAY2RGB)
+        cv2.drawChessboardCorners(img_draw, (9,6), corners, ret)
 
-
-
-
+        cv2.imshow(name, img_draw)
+        cv2.waitKey(0)
+        cv2.destroyWindow(name)
 
     def show_rectified_images(self, dataset_dir, calibration_file):
         images_left = glob.glob(dataset_dir + '/left/*.png')
