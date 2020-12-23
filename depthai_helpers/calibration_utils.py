@@ -362,7 +362,7 @@ class StereoCalibration(object):
         flags |= cv2.CALIB_USE_INTRINSIC_GUESS
         #flags |= cv2.CALIB_SAME_FOCAL_LENGTH
         #flags |= cv2.CALIB_ZERO_TANGENT_DIST
-        flags |= cv2.CALIB_RATIONAL_MODEL
+        #flags |= cv2.CALIB_RATIONAL_MODEL
         #flags |= cv2.CALIB_FIX_K1
         #flags |= cv2.CALIB_FIX_K2
         #flags |= cv2.CALIB_FIX_K3
@@ -370,7 +370,7 @@ class StereoCalibration(object):
         #flags |= cv2.CALIB_FIX_K5
         #flags |= cv2.CALIB_FIX_K6
         #flags |= cv::CALIB_ZERO_TANGENT_DIST
-        #flags |= cv2.CALIB_FIX_INTRINSIC
+        flags |= cv2.CALIB_FIX_INTRINSIC
 
         stereocalib_criteria = (cv2.TERM_CRITERIA_COUNT +
                                 cv2.TERM_CRITERIA_EPS, 100, 1e-5)
