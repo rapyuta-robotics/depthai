@@ -11,6 +11,7 @@ def write_camera_info(
     projection_matrix=None,
     rectification_matrix=None,
     extrinsics=None,
+    resized_shape=None,
 ):
     if not file_name.endswith(".yaml"):
         print("{} is not a yaml file.".format(file_name))
@@ -24,6 +25,18 @@ def write_camera_info(
     if rectification_matrix is None:
         rectification_matrix = np.eye(3)
 
+    width, height = image_shape
+    M = camera_matrix.copy()
+    P = projection_matrix.copy()
+    if resized_shape is not None:
+        width, height = resized_shape
+        w_rate = float(resized_shape[0]) / image_shape[0]
+        h_rate = float(resized_shape[1]) / image_shape[1]
+        rate_array = np.array((w_rate, h_rate, 1.0)).reshape((3, 1))
+
+        M *= rate_array
+        P *= rate_array
+
     info = {}
     info["camera_name"] = camera_name
     info["image_width"] = image_shape[0]
@@ -32,7 +45,7 @@ def write_camera_info(
     info["camera_matrix"] = {
         "rows": 3,
         "cols": 3,
-        "data": [float(x) for x in camera_matrix.flatten()],
+        "data": [float(x) for x in M.flatten()],
     }
 
     info["distortion_model"] = "plumb_bob"
@@ -51,7 +64,7 @@ def write_camera_info(
     info["projection_matrix"] = {
         "rows": 4,
         "cols": 3,
-        "data": [float(x) for x in projection_matrix.flatten()],
+        "data": [float(x) for x in P.flatten()],
     }
 
     # with open(file_name, "w") as f:

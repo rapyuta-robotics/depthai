@@ -416,6 +416,10 @@ class Main:
                               cal_data.M1, cal_data.d1, cal_data.P1, cal_data.R1)
             camera_info.write_camera_info("camera_info_r.yaml", "right", (1280, 720),
                               cal_data.M2, cal_data.d2, cal_data.P2, cal_data.R2)
+            camera_info.write_camera_info("camera_info_rgb.yaml", "rgb", (1920, 1080),
+                              cal_data.M3, cal_data.d3)
+            camera_info.write_camera_info("previewout_resize.yaml", "rgb", (1920, 1080),
+                              cal_data.M3, cal_data.d3, resized_shape=(300, 300))
 
         except AssertionError as e:
             print("[ERROR] " + str(e))
