@@ -285,6 +285,17 @@ class StereoCalibration(object):
         stereocalib_criteria = (cv2.TERM_CRITERIA_COUNT +
                                 cv2.TERM_CRITERIA_EPS, 100, 1e-5)
 
+        # stereo calibration procedure (init)
+        ret, self.M1, self.d1, self.M2, self.d2, self.R_lr, self.T_lr, self.E_lr, self.F_lr = cv2.stereoCalibrate(
+            self.objpoints, self.imgpoints_l, self.imgpoints_r,
+            self.M1, self.d1, self.M2, self.d2, self.lr_shape,
+            criteria=stereocalib_criteria, flags=flags)
+        print("calibration error (LR): " + str(ret))
+        print("calibration R (LR): \n" + str(self.R_lr))
+        print("calibration T (LR): \n" + str(self.T_lr))
+        print("calibration E (LR): \n" + str(self.E_lr))
+        print("calibration F (LR): \n" + str(self.F_lr))
+
         # stereo calibration procedure (L-RGB)
         ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
             self.objpoints, self.imgpoints_l, self.imgpoints_rgb,
@@ -306,17 +317,6 @@ class StereoCalibration(object):
         print("calibration T (R-RGB): \n" + str(self.T_r_rgb))
         print("calibration E (R-RGB): \n" + str(self.E_r_rgb))
         print("calibration F (R-RGB): \n" + str(self.F_r_rgb))
-
-        # stereo calibration procedure (init)
-        ret, self.M1, self.d1, self.M2, self.d2, self.R_lr, self.T_lr, self.E_lr, self.F_lr = cv2.stereoCalibrate(
-            self.objpoints, self.imgpoints_l, self.imgpoints_r,
-            self.M1, self.d1, self.M2, self.d2, self.lr_shape,
-            criteria=stereocalib_criteria, flags=flags)
-        print("calibration error (LR): " + str(ret))
-        print("calibration R (LR): \n" + str(self.R_lr))
-        print("calibration T (LR): \n" + str(self.T_lr))
-        print("calibration E (LR): \n" + str(self.E_lr))
-        print("calibration F (LR): \n" + str(self.F_lr))
 
         assert ret < 1.0, "[ERROR] Calibration RMS error < 1.0 (%i). Re-try image capture." % (ret)
 
@@ -370,7 +370,7 @@ class StereoCalibration(object):
         #flags |= cv2.CALIB_FIX_K5
         #flags |= cv2.CALIB_FIX_K6
         #flags |= cv::CALIB_ZERO_TANGENT_DIST
-        flags |= cv2.CALIB_FIX_INTRINSIC
+        #flags |= cv2.CALIB_FIX_INTRINSIC
 
         stereocalib_criteria = (cv2.TERM_CRITERIA_COUNT +
                                 cv2.TERM_CRITERIA_EPS, 100, 1e-5)
@@ -380,6 +380,13 @@ class StereoCalibration(object):
             self.objpoints, self.imgpoints_l, self.imgpoints_r,
             self.M1, self.d1, self.M2, self.d2, self.lr_shape,
             criteria=stereocalib_criteria, flags=flags)
+        print("calibration error (LR): " + str(ret))
+        print("calibration R (LR): \n" + str(self.R_lr))
+        print("calibration T (LR): \n" + str(self.T_lr))
+        print("calibration E (LR): \n" + str(self.E_lr))
+        print("calibration F (LR): \n" + str(self.F_lr))
+
+        flags |= cv2.CALIB_FIX_INTRINSIC
 
         # stereo calibration procedure (L-RGB)
         ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
@@ -402,28 +409,6 @@ class StereoCalibration(object):
         print("calibration T (R-RGB): \n" + str(self.T_r_rgb))
         print("calibration E (R-RGB): \n" + str(self.E_r_rgb))
         print("calibration F (R-RGB): \n" + str(self.F_r_rgb))
-
-        # stereo calibration procedure (init)
-        ret, self.M1, self.d1, self.M2, self.d2, self.R_lr, self.T_lr, self.E_lr, self.F_lr = cv2.stereoCalibrate(
-            self.objpoints, self.imgpoints_l, self.imgpoints_r,
-            self.M1, self.d1, self.M2, self.d2, self.lr_shape,
-            criteria=stereocalib_criteria, flags=flags)
-        print("calibration error (LR): " + str(ret))
-        print("calibration R (LR): \n" + str(self.R_lr))
-        print("calibration T (LR): \n" + str(self.T_lr))
-        print("calibration E (LR): \n" + str(self.E_lr))
-        print("calibration F (LR): \n" + str(self.F_lr))
-
-        ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, R_rgb, T_rgb, E_rgb, F_rgb = cv2.stereoCalibrate(
-            self.objpoints, self.imgpoints_l, self.imgpoints_rgb,
-            self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
-            criteria=stereocalib_criteria, flags=cv2.CALIB_FIX_INTRINSIC)
-
-        print("calibration error (RGB): " + str(ret))
-        print("calibration R (RGB): \n" + str(R_rgb))
-        print("calibration T (RGB): \n" + str(T_rgb))
-        print("calibration E (RGB): \n" + str(E_rgb))
-        print("calibration F (RGB): \n" + str(F_rgb))
 
         self.R1, self.R2, self.P1, self.P2, self.Q, self.roi1, self.roi2 = cv2.stereoRectify(self.M1, self.d1, self.M2, self.d1, self.lr_shape, self.R_lr, self.T_lr)
 
