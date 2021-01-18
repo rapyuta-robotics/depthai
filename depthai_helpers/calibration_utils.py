@@ -362,7 +362,7 @@ class StereoCalibration(object):
         flags |= cv2.CALIB_USE_INTRINSIC_GUESS
         #flags |= cv2.CALIB_SAME_FOCAL_LENGTH
         #flags |= cv2.CALIB_ZERO_TANGENT_DIST
-        #flags |= cv2.CALIB_RATIONAL_MODEL
+        flags |= cv2.CALIB_RATIONAL_MODEL
         #flags |= cv2.CALIB_FIX_K1
         #flags |= cv2.CALIB_FIX_K2
         #flags |= cv2.CALIB_FIX_K3
@@ -370,7 +370,7 @@ class StereoCalibration(object):
         #flags |= cv2.CALIB_FIX_K5
         #flags |= cv2.CALIB_FIX_K6
         #flags |= cv::CALIB_ZERO_TANGENT_DIST
-        #flags |= cv2.CALIB_FIX_INTRINSIC
+        flags |= cv2.CALIB_FIX_INTRINSIC
 
         stereocalib_criteria = (cv2.TERM_CRITERIA_COUNT +
                                 cv2.TERM_CRITERIA_EPS, 100, 1e-5)
@@ -385,8 +385,6 @@ class StereoCalibration(object):
         print("calibration T (LR): \n" + str(self.T_lr))
         print("calibration E (LR): \n" + str(self.E_lr))
         print("calibration F (LR): \n" + str(self.F_lr))
-
-        flags |= cv2.CALIB_FIX_INTRINSIC
 
         # stereo calibration procedure (L-RGB)
         ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
