@@ -37,6 +37,8 @@ def write_camera_info(
         M *= rate_array
         P *= rate_array
 
+        image_shape = resized_shape
+
     info = {}
     info["camera_name"] = camera_name
     info["image_width"] = image_shape[0]
