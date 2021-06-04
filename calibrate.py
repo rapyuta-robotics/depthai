@@ -30,6 +30,12 @@ on_embedded = platform.machine().startswith('arm') or platform.machine().startsw
 show_size = (480, 270)
 
 
+use_charuco = True
+charuco_size = (9, 6)
+aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
+charuco_board = cv2.aruco.CharucoBoard_create(charuco_size[0], charuco_size[1], 1, .8, aruco_dict)
+
+
 def parse_args():
     epilog_text = '''
     Captures and processes images for disparity depth calibration, generating a `depthai.calib` file
@@ -99,13 +105,29 @@ def parse_args():
     return options
 
 
-def find_chessboard(frame):
-    chessboard_flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE
-    small_frame = cv2.resize(frame, (0, 0), fx=0.3, fy=0.3)
-    return cv2.findChessboardCorners(small_frame, (9, 6), chessboard_flags)[0] and \
-           cv2.findChessboardCorners(frame, (9, 6), chessboard_flags)[0]
+def find_chessboard(frame, use_charuco=False):
+    if use_charuco:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        corners, ids, _ = cv2.aruco.detectMarkers(gray, aruco_dict)
+        if len(corners) == 0:
+            return False
 
-def test_camera_orientation(frame_l, frame_r):
+        _, charuco_points, charuco_ids = cv2.aruco.interpolateCornersCharuco(corners, ids, gray, charuco_board)
+        if charuco_points is None or charuco_ids is None or len(charuco_points) <= 3:
+            return False
+
+        return True
+    else:
+        chessboard_flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE
+        small_frame = cv2.resize(frame, (0, 0), fx=0.3, fy=0.3)
+        return cv2.findChessboardCorners(small_frame, (9, 6), chessboard_flags)[0] and \
+            cv2.findChessboardCorners(frame, (9, 6), chessboard_flags)[0]
+
+def test_camera_orientation(frame_l, frame_r, use_charuco=False):
+    if use_charuco:
+        # skip LR verification
+        return True
+
     chessboard_flags = cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_FAST_CHECK + cv2.CALIB_CB_NORMALIZE_IMAGE
     # termination criteria
     frame_l = cv2.cvtColor(frame_l, cv2.COLOR_RGB2GRAY)
@@ -234,7 +256,7 @@ class Main:
             del pipeline
 
     def parse_frame(self, frame, stream_name):
-        if not find_chessboard(frame):
+        if not find_chessboard(frame, use_charuco=use_charuco):
             return False
 
         filename = image_filename(stream_name, self.current_polygon, self.images_captured)
@@ -403,7 +425,8 @@ class Main:
 
                     if captured_left and captured_right and captured_rgb:
                         print(f"Images captured --> {self.images_captured}")
-                        if not self.images_captured and not test_camera_orientation(captured_left_frame, captured_right_frame):
+                        if not self.images_captured and \
+                                not test_camera_orientation(captured_left_frame, captured_right_frame, use_charuco=use_charuco):
                             self.show_failed_orientation()
 
                         self.images_captured += 1
