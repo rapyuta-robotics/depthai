@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import depthai
 from depthai_helpers.calibration_utils import *
 from depthai_helpers import utils
+from depthai_helpers import camera_info
 import argparse
 from argparse import ArgumentParser
 import time
@@ -26,6 +27,7 @@ except ImportError:
     use_cv = False
 
 on_embedded = platform.machine().startswith('arm') or platform.machine().startswith('aarch64')
+show_size = (480, 270)
 
 
 def parse_args():
@@ -127,7 +129,7 @@ def ts(packet):
 
 
 class Main:
-    output_scale_factor = 0.5
+    output_scale_factor = 0.25
     cmd_file = consts.resource_paths.device_cmd_fpath
     polygons = None
     width = None
@@ -150,8 +152,8 @@ class Main:
 
         self.config = {
             'streams':
-                ['left', 'right'] if not on_embedded else
-                [{'name': 'left', "max_fps": 10.0}, {'name': 'right', "max_fps": 10.0}],
+                ['left', 'right', 'video'] if not on_embedded else
+                [{'name': 'left', "max_fps": 10.0}, {'name': 'right', "max_fps": 10.0}, {'name': 'video', "max_fps": 10.0}],
             'depth':
                 {
                     'calibration_file': consts.resource_paths.calib_fpath,
@@ -164,6 +166,12 @@ class Main:
                     'shaves' : shaves,
                     'cmx_slices' : cmx_slices,
                     'NN_engines' : NN_engines,
+                },
+
+            'video_config':
+                {
+                'profile': 'mjpeg',
+                'quality': 95
                 },
             'board_config':
                 {
@@ -211,8 +219,9 @@ class Main:
         pipeline = None
 
         try:
-            device = depthai.Device("", self.args['force_usb2'])
-            pipeline = device.create_pipeline(self.config)
+            self.device = depthai.Device("", self.args['force_usb2'])
+            pipeline = self.device.create_pipeline(self.config)
+            self.device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
         except RuntimeError:
             raise RuntimeError("Unable to initialize device. Try to reset it")
 
@@ -299,20 +308,28 @@ class Main:
         capturing = False
         captured_left = False
         captured_right = False
+        captured_rgb = False
         tried_left = False
         tried_right = False
+        tried_rgb = False
         recent_left = None
         recent_right = None
+        recent_rgb = None
+        count = 0
         with self.get_pipeline() as pipeline:
             while not finished:
+                self.device.request_jpeg()
                 _, data_list = pipeline.get_available_nnet_and_data_packets()
                 for packet in data_list:
                     if packet.stream_name == "left" and (recent_left is None or ts(recent_left) < ts(packet)):
                         recent_left = packet
                     elif packet.stream_name == "right" and (recent_right is None or ts(recent_right) < ts(packet)):
                         recent_right = packet
+                    elif packet.stream_name == "video": # and (recent_rgb is None or ts(recent_rgb) < ts(packet)):
+                        # video doesnot have MetaData
+                        recent_rgb = packet
 
-                if recent_left is None or recent_right is None:
+                if recent_left is None or recent_right is None or recent_rgb is None:
                     continue
 
                 key = cv2.waitKey(1)
@@ -322,72 +339,92 @@ class Main:
 
                 if key == ord(" "):
                     capturing = True
+                    count += 1
                 
                 frame_list = []
-                for packet in (recent_left, recent_right):
+                for packet in (recent_left, recent_right, recent_rgb):
                     frame = packet.getData()
-                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+                    if packet in (recent_left, recent_right):
+                        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
 
                     if self.polygons is None:
                         self.height, self.width, _ = frame.shape
                         self.polygons = setPolygonCoordinates(self.height, self.width)
 
-                    if capturing and abs(ts(recent_left) - ts(recent_right)) < 0.001:
+                    if capturing and abs(ts(recent_left) - ts(recent_right)) < 0.001: # no timestamp for rgb
+                        print(count, packet.stream_name)
+
                         if packet.stream_name == 'left' and not tried_left:
+                            print("checking left")
                             captured_left = self.parse_frame(frame, packet.stream_name)
                             tried_left = True
                             captured_left_frame = frame.copy()
                         elif packet.stream_name == 'right' and not tried_right:
+                            print("checking right")
                             captured_right = self.parse_frame(frame, packet.stream_name)
                             tried_right = True
                             captured_right_frame = frame.copy()
 
+                        if packet.stream_name == 'video' and not tried_rgb:
+                            tried_rgb = True
+                            if captured_left and captured_right:
+                                print("checking video")
+                                frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
+                                captured_rgb = self.parse_frame(frame, packet.stream_name)
+
                     has_success = (packet.stream_name == "left" and captured_left) or \
-                                  (packet.stream_name == "right" and captured_right)
+                                  (packet.stream_name == "right" and captured_right) or \
+                                  (packet.stream_name == "video" and captured_rgb)
 
-                    if self.args['invert_v'] and self.args['invert_h']:
-                        frame = cv2.flip(frame, -1)
-                    elif self.args['invert_v']:
-                        frame = cv2.flip(frame, 0)
-                    elif self.args['invert_h']:
-                        frame = cv2.flip(frame, 1)
+                    if packet.stream_name != "video":
+                        if self.args['invert_v'] and self.args['invert_h']:
+                            frame = cv2.flip(frame, -1)
+                        elif self.args['invert_v']:
+                            frame = cv2.flip(frame, 0)
+                        elif self.args['invert_h']:
+                            frame = cv2.flip(frame, 1)
 
-                    cv2.putText(
-                        frame,
-                        "Polygon Position: {}. Captured {} of {} images.".format(
-                            self.current_polygon + 1, self.images_captured, self.total_images
-                        ),
-                        (0, 700), cv2.FONT_HERSHEY_TRIPLEX, 1.0, (255, 0, 0)
-                    )
-                    if self.polygons is not None:
-                        cv2.polylines(
-                            frame, np.array([self.polygons[self.current_polygon]]),
-                            True, (0, 255, 0) if has_success else (0, 0, 255), 4
+                        cv2.putText(
+                            frame,
+                            "Polygon Position: {}. Captured {} of {} images.".format(
+                                self.current_polygon + 1, self.images_captured, self.total_images
+                            ),
+                            (0, 700), cv2.FONT_HERSHEY_TRIPLEX, 1.0, (255, 0, 0)
                         )
+                        if self.polygons is not None:
+                            cv2.polylines(
+                                frame, np.array([self.polygons[self.current_polygon]]),
+                                True, (0, 255, 0) if has_success else (0, 0, 255), 4
+                            )
 
-                    small_frame = cv2.resize(frame, (0, 0), fx=self.output_scale_factor, fy=self.output_scale_factor)
-                    # cv2.imshow(packet.stream_name, small_frame)
-                    frame_list.append(small_frame)
+                        small_frame = cv2.resize(frame, show_size)
+                        # cv2.imshow(packet.stream_name, small_frame)
+                        frame_list.append(small_frame)
 
-                    if captured_left and captured_right:
+                    if captured_left and captured_right and captured_rgb:
                         print(f"Images captured --> {self.images_captured}")
                         if not self.images_captured and not test_camera_orientation(captured_left_frame, captured_right_frame):
                             self.show_failed_orientation()
+
                         self.images_captured += 1
                         self.images_captured_polygon += 1
                         capturing = False
                         tried_left = False
                         tried_right = False
+                        tried_rgb = False
                         captured_left = False
                         captured_right = False
+                        captured_rgb = False
 
-                    elif tried_left and tried_right:
+                    elif tried_left and tried_right and tried_rgb:
                         self.show_failed_capture_frame()
                         capturing = False
                         tried_left = False
                         tried_right = False
+                        tried_rgb = False
                         captured_left = False
                         captured_right = False
+                        captured_rgb = False
                         break
 
                     if self.images_captured_polygon == self.args['count']:
@@ -399,10 +436,8 @@ class Main:
                             cv2.destroyAllWindows()
                             break
                 
-                # combine_img = np.hstack((frame_list[0], frame_list[1]))
                 combine_img = np.vstack((frame_list[0], frame_list[1]))
-
-                cv2.imshow("left + right",combine_img)
+                cv2.imshow("left + right", combine_img)
                 frame_list.clear()
 
     def calibrate(self):
@@ -411,6 +446,15 @@ class Main:
         cal_data = StereoCalibration()
         try:
             cal_data.calibrate("dataset", self.args['square_size_cm'], "./resources/depthai.calib", flags)
+            camera_info.write_camera_info("camera_info_l.yaml", "left", (1280, 720),
+                              cal_data.M1, cal_data.d1, cal_data.P1, cal_data.R1)
+            camera_info.write_camera_info("camera_info_r.yaml", "right", (1280, 720),
+                              cal_data.M2, cal_data.d2, cal_data.P2, cal_data.R2)
+            camera_info.write_camera_info("camera_info_rgb.yaml", "rgb", (1920, 1080),
+                              cal_data.M3, cal_data.d3)
+            camera_info.write_camera_info("previewout_resize.yaml", "previewout", (1920, 1080),
+                              cal_data.M3, cal_data.d3, resized_shape=(300, 300))
+
         except AssertionError as e:
             print("[ERROR] " + str(e))
             raise SystemExit(1)
@@ -422,6 +466,7 @@ class Main:
                     shutil.rmtree('dataset/')
                 Path("dataset/left").mkdir(parents=True, exist_ok=True)
                 Path("dataset/right").mkdir(parents=True, exist_ok=True)
+                Path("dataset/video").mkdir(parents=True, exist_ok=True)
             except OSError:
                 print("An error occurred trying to create image dataset directories!")
                 raise
