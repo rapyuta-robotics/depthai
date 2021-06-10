@@ -466,7 +466,7 @@ class Main:
     def calibrate(self):
         print("Starting image processing")
         flags = [self.config['board_config']['stereo_center_crop']]
-        cal_data = StereoCalibration()
+        cal_data = StereoCalibration(use_charuco=use_charuco, charuco_size=charuco_size)
         try:
             cal_data.calibrate("dataset", self.args['square_size_cm'], "./resources/depthai.calib", flags)
             camera_info.write_camera_info("camera_info_l.yaml", "left", (1280, 720),
