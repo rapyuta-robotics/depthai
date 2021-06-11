@@ -31,7 +31,7 @@ show_size = (480, 270)
 
 
 use_charuco = True
-charuco_size = (9, 6)
+charuco_size = (10, 7)
 aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
 charuco_board = cv2.aruco.CharucoBoard_create(charuco_size[0], charuco_size[1], 1, .8, aruco_dict)
 
@@ -243,7 +243,7 @@ class Main:
         try:
             self.device = depthai.Device("", self.args['force_usb2'])
             pipeline = self.device.create_pipeline(self.config)
-            self.device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
+            # self.device.request_af_mode(depthai.AutofocusMode.AF_MODE_EDOF)
         except RuntimeError:
             raise RuntimeError("Unable to initialize device. Try to reset it")
 
@@ -368,6 +368,8 @@ class Main:
                     frame = packet.getData()
                     if packet in (recent_left, recent_right):
                         frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+                    elif packet == recent_rgb:
+                        frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
 
                     if self.polygons is None:
                         self.height, self.width, _ = frame.shape
@@ -386,26 +388,23 @@ class Main:
                             captured_right = self.parse_frame(frame, packet.stream_name)
                             tried_right = True
                             captured_right_frame = frame.copy()
-
-                        if packet.stream_name == 'video' and not tried_rgb:
+                        elif packet.stream_name == 'video' and not tried_rgb:
+                            print("checking video")
+                            captured_rgb = self.parse_frame(frame, packet.stream_name)
                             tried_rgb = True
-                            if captured_left and captured_right:
-                                print("checking video")
-                                frame = cv2.imdecode(frame, cv2.IMREAD_COLOR)
-                                captured_rgb = self.parse_frame(frame, packet.stream_name)
 
                     has_success = (packet.stream_name == "left" and captured_left) or \
                                   (packet.stream_name == "right" and captured_right) or \
                                   (packet.stream_name == "video" and captured_rgb)
 
-                    if packet.stream_name != "video":
-                        if self.args['invert_v'] and self.args['invert_h']:
-                            frame = cv2.flip(frame, -1)
-                        elif self.args['invert_v']:
-                            frame = cv2.flip(frame, 0)
-                        elif self.args['invert_h']:
-                            frame = cv2.flip(frame, 1)
+                    if self.args['invert_v'] and self.args['invert_h']:
+                        frame = cv2.flip(frame, -1)
+                    elif self.args['invert_v']:
+                        frame = cv2.flip(frame, 0)
+                    elif self.args['invert_h']:
+                        frame = cv2.flip(frame, 1)
 
+                    if packet.stream_name != "video":
                         cv2.putText(
                             frame,
                             "Polygon Position: {}. Captured {} of {} images.".format(
@@ -419,9 +418,9 @@ class Main:
                                 True, (0, 255, 0) if has_success else (0, 0, 255), 4
                             )
 
-                        small_frame = cv2.resize(frame, show_size)
-                        # cv2.imshow(packet.stream_name, small_frame)
-                        frame_list.append(small_frame)
+                    small_frame = cv2.resize(frame, show_size)
+                    # cv2.imshow(packet.stream_name, small_frame)
+                    frame_list.append(small_frame)
 
                     if captured_left and captured_right and captured_rgb:
                         print(f"Images captured --> {self.images_captured}")
@@ -459,7 +458,7 @@ class Main:
                             cv2.destroyAllWindows()
                             break
                 
-                combine_img = np.vstack((frame_list[0], frame_list[1]))
+                combine_img = np.vstack((frame_list[0], frame_list[1], frame_list[2]))
                 cv2.imshow("left + right", combine_img)
                 frame_list.clear()
 

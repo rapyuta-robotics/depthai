@@ -67,7 +67,7 @@ class StereoCalibration(object):
         self.use_charuco = use_charuco
         self.charuco_size = charuco_size
         if self.use_charuco:
-            self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+            self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
             self.charuco_board = cv2.aruco.CharucoBoard_create(self.charuco_size[0], self.charuco_size[1], 1, .8, self.aruco_dict)
             self.init_f = 200.0
 
@@ -260,7 +260,7 @@ class StereoCalibration(object):
 
             assert img_l is not None, "ERROR: Images not read correctly"
             assert img_r is not None, "ERROR: Images not read correctly"
-            # assert img_rgb is not None, "ERROR: Images not read correctly"
+            assert img_rgb is not None, "ERROR: Images not read correctly"
 
             print("Finding chessboard corners for %s and %s..." % (os.path.basename(image_left), os.path.basename(image_right)))
             start_time = time.time()
@@ -270,15 +270,14 @@ class StereoCalibration(object):
                     self.detect_charuco_corners(img_l)
                 ret_r, corners_r, ids_r, charuco_points_r, charuco_ids_r = \
                     self.detect_charuco_corners(img_r)
-                # ret_rgb, corners_rgb, ids_rgb, charuco_points_rgb, charuco_ids_rgb = \
-                #     self.detect_charuco_corners(img_rgb)
+                ret_rgb, corners_rgb, ids_rgb, charuco_points_rgb, charuco_ids_rgb = \
+                    self.detect_charuco_corners(img_rgb)
                 ret_rgb = True
 
                 # if all has detections
-                # if (len(lds_l) > 0 and len(lds_r) > 0 and len(lds_rgb) > 0):
                 if not ret_l or not ret_r or not ret_rgb:
                     continue
-                if (len(ids_l) == 0 and len(ids_r) == 0):
+                if (len(ids_l) == 0 or len(ids_r) == 0 or len(ids_rgb) == 0):
                     continue
 
                 # type(corners) = list,
@@ -290,23 +289,28 @@ class StereoCalibration(object):
 
                 img_show_l = cv2.cvtColor(img_l, cv2.COLOR_GRAY2BGR)
                 img_show_r = cv2.cvtColor(img_r, cv2.COLOR_GRAY2BGR)
+                img_show_rgb = img_rgb.copy()
                 cv2.aruco.drawDetectedCornersCharuco(img_show_l, charuco_points_l, charuco_ids_l, (0, 255, 0))
                 cv2.aruco.drawDetectedCornersCharuco(img_show_r, charuco_points_r, charuco_ids_r, (0, 255, 0))
+                cv2.aruco.drawDetectedCornersCharuco(img_show_rgb, charuco_points_rgb, charuco_ids_rgb, (0, 255, 0))
+                img_show_rgb = cv2.resize(img_show_rgb, (img_show_l.shape[1], img_show_l.shape[0]))
 
-                img_show = np.vstack((img_show_l, img_show_r))
+                img_show_1 = np.vstack((img_show_l, img_show_r))
+                img_show_2 = np.vstack((img_show_rgb, np.zeros_like(img_show_rgb)))
+                img_show = np.hstack((img_show_1, img_show_2))
                 img_show = cv2.resize(img_show, (img_show.shape[1] // 2, img_show.shape[0] // 2))
-                # img_show = cv2.imshow("charuco corners", img_show)
-                # k = cv2.waitKey(0)
+                img_show = cv2.imshow("charuco corners", img_show)
+                k = cv2.waitKey(0)
 
                 self.objpoints.append(self.objp)
 
                 self.imgpoints_l.append(charuco_points_l)
                 self.imgpoints_r.append(charuco_points_r)
-                # self.imgpoints_rgb.append(charuco_points_rgb)
+                self.imgpoints_rgb.append(charuco_points_rgb)
 
                 self.all_ids_l.append(charuco_ids_l)
                 self.all_ids_r.append(charuco_ids_r)
-                # self.all_ids_rgb.append(charuco_ids_rgb)
+                self.all_ids_rgb.append(charuco_ids_rgb)
 
                 self.calib_successes_lr.append(polygon_from_image_name(image_left))
                 print("\t[OK]. Took %i seconds." % (round(time.time() - start_time, 2)))
@@ -350,7 +354,7 @@ class StereoCalibration(object):
                     print("\t[ERROR] - Corners not detected. Took %i seconds." % (round(time.time() - start_time, 2)))
 
             self.lr_shape = img_r.shape[::-1]
-            # self.rgb_shape = img_rgb.shape[:2][::-1]
+            self.rgb_shape = img_rgb.shape[:2][::-1]
         print(str(len(self.objpoints)) + " of " + str(len(images_left)) +
               " images being used for calibration")
         # self.ensure_valid_images()
@@ -528,10 +532,13 @@ class StereoCalibration(object):
             rt, self.M2, self.d2, self.r2, self.t2 = \
                 self.run_charuco_single_calibration(
                     self.imgpoints_r, self.all_ids_r, (self.lr_shape[1], self.lr_shape[0]))
-            # rt, self.M3, self.d3, self.r3, self.t3 = \
-            #     self.run_charuco_single_calibration(
-            #         self.imgpoints_rgb, self.all_ids_rgb, (self.rgb_shape[1], self.rgb_shape[0]))
+            rt, self.M3, self.d3, self.r3, self.t3 = \
+                self.run_charuco_single_calibration(
+                    self.imgpoints_rgb, self.all_ids_rgb, (self.rgb_shape[1], self.rgb_shape[0]))
+            # c for center
             obj_pts_lr, img_points_l_lr, img_points_r_lr = self.set_stereo_calib_points(self.all_ids_l, self.all_ids_r, self.imgpoints_l, self.imgpoints_r)
+            obj_pts_lc, img_points_l_lc, img_points_r_lc = self.set_stereo_calib_points(self.all_ids_l, self.all_ids_rgb, self.imgpoints_l, self.imgpoints_rgb)
+            obj_pts_cr, img_points_l_cr, img_points_r_cr = self.set_stereo_calib_points(self.all_ids_rgb, self.all_ids_r, self.imgpoints_rgb, self.imgpoints_r)
         else:
             rt, self.M1, self.d1, self.r1, self.t1 = cv2.calibrateCamera(
                 self.objpoints, self.imgpoints_l, self.lr_shape, None, None)
@@ -541,6 +548,8 @@ class StereoCalibration(object):
                 self.objpoints, self.imgpoints_rgb, self.lr_shape, None, None)
 
             obj_pts_lr, img_points_l_lr, img_points_r_lr = self.objpoints, self.imgpoints_l, self.imgpoints_r
+            obj_pts_lc, img_points_l_lc, img_points_r_lc = self.objpoints, self.imgpoints_l, self.imgpoints_r
+            obj_pts_cr, img_points_l_cr, img_points_r_cr = self.objpoints, self.imgpoints_rgb, self.imgpoints_r
 
         # stereo calibration procedure (init)
         ret, self.M1, self.d1, self.M2, self.d2, self.R_lr, self.T_lr, self.E_lr, self.F_lr = cv2.stereoCalibrate(
@@ -553,27 +562,27 @@ class StereoCalibration(object):
         print("calibration E (LR): \n" + str(self.E_lr))
         print("calibration F (LR): \n" + str(self.F_lr))
 
-        # # stereo calibration procedure (L-RGB)
-        # ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
-        #     self.objpoints, self.imgpoints_l, self.imgpoints_rgb,
-        #     self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
-        #     criteria=stereocalib_criteria, flags=flags)
-        # print("calibration error (RGB): " + str(ret))
-        # print("calibration R (L-RGB): \n" + str(self.R_l_rgb))
-        # print("calibration T (L-RGB): \n" + str(self.T_l_rgb))
-        # print("calibration E (L-RGB): \n" + str(self.E_l_rgb))
-        # print("calibration F (L-RGB): \n" + str(self.F_l_rgb))
+        # stereo calibration procedure (L-RGB)
+        ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
+            obj_pts_lc, img_points_l_lc, img_points_r_lc,
+            self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
+            criteria=stereocalib_criteria, flags=flags)
+        print("calibration error (RGB): " + str(ret))
+        print("calibration R (L-RGB): \n" + str(self.R_l_rgb))
+        print("calibration T (L-RGB): \n" + str(self.T_l_rgb))
+        print("calibration E (L-RGB): \n" + str(self.E_l_rgb))
+        print("calibration F (L-RGB): \n" + str(self.F_l_rgb))
 
-        # # stereo calibration procedure (R-RGB)
-        # ret, self.M2_rgb, self.d2_rgb, self.M3, self.d3, self.R_r_rgb, self.T_r_rgb, self.E_r_rgb, self.F_r_rgb = cv2.stereoCalibrate(
-        #     self.objpoints, self.imgpoints_r, self.imgpoints_rgb,
-        #     self.M2, self.d2, self.M3, self.d3, self.lr_shape,
-        #     criteria=stereocalib_criteria, flags=flags)
-        # print("calibration error (RGB): " + str(ret))
-        # print("calibration R (R-RGB): \n" + str(self.R_r_rgb))
-        # print("calibration T (R-RGB): \n" + str(self.T_r_rgb))
-        # print("calibration E (R-RGB): \n" + str(self.E_r_rgb))
-        # print("calibration F (R-RGB): \n" + str(self.F_r_rgb))
+        # stereo calibration procedure (R-RGB)
+        ret, self.M3_rgb, self.d3_rgb, self.M2, self.d2, self.R_r_rgb, self.T_r_rgb, self.E_r_rgb, self.F_r_rgb = cv2.stereoCalibrate(
+            obj_pts_cr, img_points_l_cr, img_points_r_cr,
+            self.M3, self.d3, self.M2, self.d2, self.lr_shape,
+            criteria=stereocalib_criteria, flags=flags)
+        print("calibration error (RGB): " + str(ret))
+        print("calibration R (R-RGB): \n" + str(self.R_r_rgb))
+        print("calibration T (R-RGB): \n" + str(self.T_r_rgb))
+        print("calibration E (R-RGB): \n" + str(self.E_r_rgb))
+        print("calibration F (R-RGB): \n" + str(self.F_r_rgb))
 
         self.R1, self.R2, self.P1, self.P2, self.Q, self.roi1, self.roi2 = cv2.stereoRectify(self.M1, self.d1, self.M2, self.d1, self.lr_shape, self.R_lr, self.T_lr)
 
