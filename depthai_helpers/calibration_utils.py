@@ -69,7 +69,8 @@ class StereoCalibration(object):
         if self.use_charuco:
             self.aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_250)
             self.charuco_board = cv2.aruco.CharucoBoard_create(self.charuco_size[0], self.charuco_size[1], 1, .8, self.aruco_dict)
-            self.init_f = 200.0
+            self.init_f_lr = 800.0
+            self.init_f_rgb = 1500.0
 
     def calibrate(self, filepath, square_size, out_filepath, flags):
         """Function to calculate calibration for stereo camera."""
@@ -183,13 +184,13 @@ class StereoCalibration(object):
 
         return True, corners, ids, charuco_points, charuco_ids  # res, points, ids
 
-    def run_charuco_single_calibration(self, points, ids, imageSize):
+    def run_charuco_single_calibration(self, points, ids, init_f, imageSize):
         calib_flags = cv2.CALIB_RATIONAL_MODEL #  + cv2.CALIB_TILTED_MODEL#  + cv2.CALIB_THIN_PRISM_MODEL
         calib_flags += cv2.CALIB_USE_INTRINSIC_GUESS
         calib_criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 200, 1e-6)
 
-        cameraMatrixInit = np.array([[self.init_f, 0., imageSize[0] / 2.],
-                                     [0., self.init_f, imageSize[1] / 2.],
+        cameraMatrixInit = np.array([[init_f, 0., imageSize[0] / 2.],
+                                     [0., init_f, imageSize[1] / 2.],
                                      [0., 0., 1.]])
         distCoeffsInit = np.zeros((14, 1))
 
@@ -295,12 +296,13 @@ class StereoCalibration(object):
                 cv2.aruco.drawDetectedCornersCharuco(img_show_rgb, charuco_points_rgb, charuco_ids_rgb, (0, 255, 0))
                 img_show_rgb = cv2.resize(img_show_rgb, (img_show_l.shape[1], img_show_l.shape[0]))
 
-                img_show_1 = np.vstack((img_show_l, img_show_r))
-                img_show_2 = np.vstack((img_show_rgb, np.zeros_like(img_show_rgb)))
-                img_show = np.hstack((img_show_1, img_show_2))
-                img_show = cv2.resize(img_show, (img_show.shape[1] // 2, img_show.shape[0] // 2))
-                img_show = cv2.imshow("charuco corners", img_show)
-                k = cv2.waitKey(0)
+                # img_show_1 = np.vstack((img_show_l, img_show_r))
+                # img_show_2 = np.vstack((img_show_rgb, np.zeros_like(img_show_rgb)))
+                # img_show = np.hstack((img_show_1, img_show_2))
+                # img_show = cv2.resize(img_show, (img_show.shape[1] // 2, img_show.shape[0] // 2))
+                # # img_show = np.hstack((img_show_l, img_show_r, img_show_rgb))
+                # img_show = cv2.imshow("charuco corners", img_show)
+                # k = cv2.waitKey(0)
 
                 self.objpoints.append(self.objp)
 
@@ -526,15 +528,19 @@ class StereoCalibration(object):
 
         # init camera calibrations
         if self.use_charuco:
-            rt, self.M1, self.d1, self.r1, self.t1 = \
+            rt1, self.M1, self.d1, self.r1, self.t1 = \
                 self.run_charuco_single_calibration(
-                    self.imgpoints_l, self.all_ids_l, (self.lr_shape[1], self.lr_shape[0]))
-            rt, self.M2, self.d2, self.r2, self.t2 = \
+                    self.imgpoints_l, self.all_ids_l,
+                    self.init_f_lr, (self.lr_shape[1], self.lr_shape[0]))
+            rt2, self.M2, self.d2, self.r2, self.t2 = \
                 self.run_charuco_single_calibration(
-                    self.imgpoints_r, self.all_ids_r, (self.lr_shape[1], self.lr_shape[0]))
-            rt, self.M3, self.d3, self.r3, self.t3 = \
+                    self.imgpoints_r, self.all_ids_r,
+                    self.init_f_lr, (self.lr_shape[1], self.lr_shape[0]))
+            rt3, self.M3, self.d3, self.r3, self.t3 = \
                 self.run_charuco_single_calibration(
-                    self.imgpoints_rgb, self.all_ids_rgb, (self.rgb_shape[1], self.rgb_shape[0]))
+                    self.imgpoints_rgb, self.all_ids_rgb,
+                    self.init_f_rgb, (self.rgb_shape[1], self.rgb_shape[0]))
+            print("single lens calibration errors:  {}, {}, {}".format(rt1, rt2, rt3))
             # c for center
             obj_pts_lr, img_points_l_lr, img_points_r_lr = self.set_stereo_calib_points(self.all_ids_l, self.all_ids_r, self.imgpoints_l, self.imgpoints_r)
             obj_pts_lc, img_points_l_lc, img_points_r_lc = self.set_stereo_calib_points(self.all_ids_l, self.all_ids_rgb, self.imgpoints_l, self.imgpoints_rgb)
@@ -563,7 +569,7 @@ class StereoCalibration(object):
         print("calibration F (LR): \n" + str(self.F_lr))
 
         # stereo calibration procedure (L-RGB)
-        ret, self.M1_rgb, self.d1_rgb, self.M3, self.d3, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
+        ret, self.M1, self.d1, self.M3_rgb, self.d3_rgb, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
             obj_pts_lc, img_points_l_lc, img_points_r_lc,
             self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
             criteria=stereocalib_criteria, flags=flags)
@@ -574,9 +580,9 @@ class StereoCalibration(object):
         print("calibration F (L-RGB): \n" + str(self.F_l_rgb))
 
         # stereo calibration procedure (R-RGB)
-        ret, self.M3_rgb, self.d3_rgb, self.M2, self.d2, self.R_r_rgb, self.T_r_rgb, self.E_r_rgb, self.F_r_rgb = cv2.stereoCalibrate(
-            obj_pts_cr, img_points_l_cr, img_points_r_cr,
-            self.M3, self.d3, self.M2, self.d2, self.lr_shape,
+        ret, self.M2, self.d2, self.M3_rgb, self.d3_rgb, self.R_r_rgb, self.T_r_rgb, self.E_r_rgb, self.F_r_rgb = cv2.stereoCalibrate(
+            obj_pts_cr, img_points_r_cr, img_points_l_cr,  # L <--> R
+            self.M2, self.d2, self.M3, self.d3, self.lr_shape,
             criteria=stereocalib_criteria, flags=flags)
         print("calibration error (RGB): " + str(ret))
         print("calibration R (R-RGB): \n" + str(self.R_r_rgb))
