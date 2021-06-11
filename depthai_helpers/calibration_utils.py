@@ -558,7 +558,7 @@ class StereoCalibration(object):
             obj_pts_cr, img_points_l_cr, img_points_r_cr = self.objpoints, self.imgpoints_rgb, self.imgpoints_r
 
         # stereo calibration procedure (init)
-        ret, self.M1, self.d1, self.M2, self.d2, self.R_lr, self.T_lr, self.E_lr, self.F_lr = cv2.stereoCalibrate(
+        ret, _, _, _, _, self.R_lr, self.T_lr, self.E_lr, self.F_lr = cv2.stereoCalibrate(
             obj_pts_lr, img_points_l_lr, img_points_r_lr,
             self.M1, self.d1, self.M2, self.d2, self.lr_shape,
             criteria=stereocalib_criteria, flags=flags)
@@ -569,7 +569,7 @@ class StereoCalibration(object):
         print("calibration F (LR): \n" + str(self.F_lr))
 
         # stereo calibration procedure (L-RGB)
-        ret, self.M1, self.d1, self.M3_rgb, self.d3_rgb, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
+        ret, _, _, _, _, self.R_l_rgb, self.T_l_rgb, self.E_l_rgb, self.F_l_rgb = cv2.stereoCalibrate(
             obj_pts_lc, img_points_l_lc, img_points_r_lc,
             self.M1, self.d1, self.M3, self.d3, self.lr_shape,  # image size can be any in case of CALIB_FIX_INTRINSIC
             criteria=stereocalib_criteria, flags=flags)
@@ -580,7 +580,7 @@ class StereoCalibration(object):
         print("calibration F (L-RGB): \n" + str(self.F_l_rgb))
 
         # stereo calibration procedure (R-RGB)
-        ret, self.M2, self.d2, self.M3_rgb, self.d3_rgb, self.R_r_rgb, self.T_r_rgb, self.E_r_rgb, self.F_r_rgb = cv2.stereoCalibrate(
+        ret, _, _, _, _, self.R_r_rgb, self.T_r_rgb, self.E_r_rgb, self.F_r_rgb = cv2.stereoCalibrate(
             obj_pts_cr, img_points_r_cr, img_points_l_cr,  # L <--> R
             self.M2, self.d2, self.M3, self.d3, self.lr_shape,
             criteria=stereocalib_criteria, flags=flags)
